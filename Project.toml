@@ -2,3 +2,6 @@ name = "MEDYANSimRunner"
 uuid = "b58a3b99-22e3-44d1-b5ea-258f082a6fe8"
 authors = ["nhz2 <nhz2@cornell.edu>"]
 version = "0.1.0"
+
+[deps]
+Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
