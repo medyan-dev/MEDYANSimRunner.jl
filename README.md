@@ -25,7 +25,7 @@ Do not mutate these variables.
  - `JOB_IDX::Int`: The job index starting with job 1. This is used for multi job simulations.
 
 #### `setup() -> header_dict, states...`
-Take the job index starting with job 1 and return the header dictionary to be written as the `header.json` file in output.
+Return the header dictionary to be written as the `header.json` file in output.
 Also return the states that get passed on to `loop` and the states that get passed to `save_snapshot` and `load_snapshot`.
 Also set the default random number generator seed.
 
