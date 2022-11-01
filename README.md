@@ -14,33 +14,35 @@ The input directory should not be mutated during or after a simulation.
 ### `main.jl` file
 
 This file contains the julia functions used when running the simulation.
-These functions can modify any global varables and any input state variables.
-These functions can also use the default random number generator.
-The global varables are auto saved and loaded as well.
+These functions can modify any input state variables, but in general should return the state.
+These functions can also use the default random number generator, this will automatically saved and loaded.
 
-#### Reserved global variables
-Do not mutate these variables.
+#### Standard input parameters.
+ - `step::Int`: starts out at 0 after setup and is auto incremented right after every loop.
 
- - `STEP::Ref{Int}`: starts out at 0 after setup and is auto incremented every loop, do not mutate this reference.
- - `JOB_IDX::Int`: The job index starting with job 1. This is used for multi job simulations.
-
-#### `setup() -> header_dict, states...`
+#### `setup(job_idx::Int) -> header_dict, states...`
 Return the header dictionary to be written as the `header.json` file in output.
 Also return the states that get passed on to `loop` and the states that get passed to `save_snapshot` and `load_snapshot`.
 Also set the default random number generator seed.
 
-#### `loop(states...) -> states...`
+`job_idx::Int`: The job index starting with job 1. This is used for multi job simulations.
+
+
+#### `loop(step::Int, states...) -> states...`
 Return the states that get passed to `save_snapshot`
 
-#### `done(states...) -> done::Bool`
+#### `done(step::Int, states...) -> done::Bool, expected_final_step::Int`
 Return true if the simulation is done, or false if `loop` should be called again.
+
+Also return the expected final value of step, used for displaying the simulation progress.
+
 This function should not mutate `states`
 
-#### `save_snapshot(hdf5_group::HDF5.Group, states...)`
+#### `save_snapshot(step::Int, hdf5_group::HDF5.Group, states...)`
 Save the states in the empty `hdf5_group`.
 This function should not mutate `states`
 
-#### `load_snapshot(hdf5_group::HDF5.Group, states...) -> states...`
+#### `load_snapshot(step::Int, hdf5_group::HDF5.Group, states...) -> states...`
 Load the states saved by `save_snapshot` `hdf5_group`
 This function can mutate `states`.
 `states` may be the states returned from `setup` or the `states` returned by `loop`.
@@ -52,6 +54,14 @@ These contain the julia environment used when running the simulation.
 ### `Job.toml`
 
 This file contains options for configuring the simulation runner.
+
+step_timeout: the maximum amount of time each step is allowed to take before the job is killed.
+
+max_steps: the maximum number of steps a job is allowed to take before the job is killed.
+
+startup_timeout: the maximum amount of time to load everything and run the first loop.
+
+max_snapshot_bytes: the maximum amount of harddrive space each snapshot is allowed to use.
 
 
 ## `output` directory
