@@ -14,6 +14,36 @@ The input directory should not be mutated during or after a simulation.
 ### `main.jl` file
 
 This file contains the julia functions used when running the simulation.
+These functions can modify any global varables and any input state variables.
+These functions can also use the default random number generator.
+The global varables are auto saved and loaded as well.
+
+#### Reserved global variables
+Do not mutate these variables.
+
+ - `STEP::Ref{Int}`: starts out at 0 after setup and is auto incremented every loop, do not mutate this reference.
+ - `JOB_IDX::Int`: The job index starting with job 1. This is used for multi job simulations.
+
+#### `setup() -> header_dict, states...`
+Take the job index starting with job 1 and return the header dictionary to be written as the `header.json` file in output.
+Also return the states that get passed on to `loop` and the states that get passed to `save_snapshot` and `load_snapshot`.
+Also set the default random number generator seed.
+
+#### `loop(states...) -> states...`
+Return the states that get passed to `save_snapshot`
+
+#### `done(states...) -> done::Bool`
+Return true if the simulation is done, or false if `loop` should be called again.
+This function should not mutate `states`
+
+#### `save_snapshot(hdf5_group::HDF5.Group, states...)`
+Save the states in the empty `hdf5_group`.
+This function should not mutate `states`
+
+#### `load_snapshot(hdf5_group::HDF5.Group, states...) -> states...`
+Load the states saved by `save_snapshot` `hdf5_group`
+This function can mutate `states`.
+`states` may be the states returned from `setup` or the `states` returned by `loop`.
 
 ### `Manifest.toml` and `Project.toml`
 
@@ -41,3 +71,4 @@ Data describing the saved snapshots, and if the simulation is done or errored, o
 
 ### `snapshots` subdirectory
 Contains `snapshot$i.h5` files where `i` is the step of the simulation.
+The states returned by `setup` are stored in `snapshot0.h5`
