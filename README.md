@@ -55,13 +55,13 @@ These contain the julia environment used when running the simulation.
 
 This file contains options for configuring the simulation runner.
 
-step_timeout: the maximum amount of time each step is allowed to take before the job is killed.
+- `step_timeout`: the maximum amount of time each step is allowed to take before the job is killed.
 
-max_steps: the maximum number of steps a job is allowed to take before the job is killed.
+- `max_steps`: the maximum number of steps a job is allowed to take before the job is killed.
 
-startup_timeout: the maximum amount of time to load everything and run the first loop.
+- `startup_timeout`: the maximum amount of time to load everything and run the first loop.
 
-max_snapshot_bytes: the maximum amount of harddrive space each snapshot is allowed to use.
+- `max_snapshot_bytes`: the maximum amount of harddrive space each snapshot is allowed to use.
 
 
 ## `output` directory
@@ -78,6 +78,66 @@ A description of the system.
 
 ### `info.txt`
 Data describing the saved snapshots, and if the simulation is done or errored, or needs to be continued.
+
+The last element in each line is the sha256 of the line, not including the last comma space, and hash value.
+
+
+The first line is.
+```
+version = 1.0.0, job_idx = 1, input_git_tree_sha1 = 5a936e..., 54bf8d69288...
+```
+- `version`: version of the info.txt format.
+- `job_idx`: index of the job. 
+- `input_git_tree_sha1`: hash of input directory
+
+The second line is:
+```
+header_sha256 = 2cf934..., 312f788...
+```
+- `header_sha256`: hash of header.json.
+Or:
+```
+Error starting job, 8d69288...
+```
+
+After these lines each of the next lines correspond to a saved snapshot.
+
+These have the format:
+```
+yyyy-mm-dd HH:MM:SS, step number, nthreads, julia versioninfo, rng state, snapshot sha256, line sha256
+```
+
+The final line explains how the simulation ended it can be one of the following:
+```
+Error starting job, line sha256
+```
+
+```
+Error running job, line sha256
+```
+
+```
+Error startup_timeout reached, line sha256
+```
+
+```
+Error step_timeout reached, line sha256
+```
+
+```
+Error max_steps reached, line sha256
+```
+
+```
+Error max_snapshot_bytes reached, line sha256
+```
+
+```
+Done, line sha256
+```
+
+See the log file for more details and error messages.
+
 
 ### `snapshots` subdirectory
 Contains `snapshot$i.h5` files where `i` is the step of the simulation.
