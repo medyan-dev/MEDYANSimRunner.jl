@@ -20,31 +20,31 @@ These functions can also use the default random number generator, this will auto
 #### Standard input parameters.
  - `step::Int`: starts out at 0 after setup and is auto incremented right after every loop.
 
-#### `setup(job_idx::Int) -> header_dict, states...`
+#### `setup(job_idx::Int) -> header_dict, state`
 Return the header dictionary to be written as the `header.json` file in output.
-Also return the states that get passed on to `loop` and the states that get passed to `save_snapshot` and `load_snapshot`.
+Also return the state that gets passed on to `loop` and the state that gets passed to `save_snapshot` and `load_snapshot`.
 Also set the default random number generator seed.
 
 `job_idx::Int`: The job index starting with job 1. This is used for multi job simulations.
 
-#### `save_snapshot(step::Int, hdf5_group::Union{HDF5.Group, HDF5.File}, states...)`
-Save the states in the empty `hdf5_group`.
-This function should not mutate `states`
+#### `save_snapshot(step::Int, hdf5_group::Union{HDF5.Group, HDF5.File}, state)`
+Save the state in the empty `hdf5_group`.
+This function should not mutate `state`
 
-#### `load_snapshot(step::Int, hdf5_group::Union{HDF5.Group, HDF5.File}, states...) -> states...`
-Load the states saved by `save_snapshot` `hdf5_group`
-This function can mutate `states`.
-`states` may be the states returned from `setup` or the `states` returned by `loop`.
+#### `load_snapshot(step::Int, hdf5_group::Union{HDF5.Group, HDF5.File}, state) -> state`
+Load the state saved by `save_snapshot` `hdf5_group`
+This function can mutate `state`.
+`state` may be the state returned from `setup` or the `state` returned by `loop`.
 
-#### `done(step::Int, states...) -> done::Bool, expected_final_step::Int`
+#### `done(step::Int, state) -> done::Bool, expected_final_step::Int`
 Return true if the simulation is done, or false if `loop` should be called again.
 
 Also return the expected value of step when done will first be true, used for displaying the simulation progress.
 
-This function should not mutate `states`
+This function should not mutate `state`
 
-#### `loop(step::Int, states...) -> states...`
-Return the states that get passed to `save_snapshot`
+#### `loop(step::Int, state) -> state`
+Return the state that get passed to `save_snapshot`
 
 
 
@@ -52,6 +52,29 @@ Return the states that get passed to `save_snapshot`
 
 These contain the julia environment used when running the simulation. These must contain HDF5 and JSON3, because these are required for saving data.
 
+### Main loop pseudo code
+
+```
+activate and instantiate the environment
+include("main.jl")
+create output directory if it doesn't exist
+header, state =  setup(job_idx)
+save header
+step = 0
+file = create snapshot file(step)
+save_snapshot(step, file, state)
+while true
+    state = load_snapshot(step, file, state)
+    close(file)
+    state = loop(step, state)
+    step = step + 1
+    file = create snapshot file(step)
+    save_snapshot(step, file, state)
+    if done(step::Int, state)
+        break
+    end
+end
+```
 ### `Job.toml`
 
 This file contains options for configuring the simulation runner.
