@@ -25,3 +25,16 @@
 - startup-error
 - startup-timeout
 - too-big-snapshot
+
+The following states can by detected by statically analysing the input and output directories.
+- clean-partial
+- corrupted-init-output
+- corrupted-snapshot
+- missing-job
+- missing-main
+- missing-manifest
+- missing-project
+- partially-started
+- ended in success
+- ended in error
+- clean not started
