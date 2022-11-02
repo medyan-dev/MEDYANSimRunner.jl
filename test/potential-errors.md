@@ -27,14 +27,12 @@
 - too-big-snapshot
 
 The following states can by detected by statically analysing the input and output directories.
-- clean-partial
-- corrupted-init-output
-- corrupted-snapshot
-- missing-job
-- missing-main
-- missing-manifest
-- missing-project
-- partially-started
-- ended in success
-- ended in error
-- clean not started
+- clean-partial : retry
+- corrupted-init-output : retry
+- corrupted-snapshot : retry
+- missing-input-file : exit
+- input-changed : exit
+- partially-started : retry
+- ended in success : exit
+- ended in error : exit
+- clean not started : retry
