@@ -27,41 +27,44 @@ Also set the default random number generator seed.
 
 `job_idx::Int`: The job index starting with job 1. This is used for multi job simulations.
 
-
-#### `loop(step::Int, states...) -> states...`
-Return the states that get passed to `save_snapshot`
-
-#### `done(step::Int, states...) -> done::Bool, expected_final_step::Int`
-Return true if the simulation is done, or false if `loop` should be called again.
-
-Also return the expected final value of step, used for displaying the simulation progress.
-
-This function should not mutate `states`
-
-#### `save_snapshot(step::Int, hdf5_group::HDF5.Group, states...)`
+#### `save_snapshot(step::Int, hdf5_group::Union{HDF5.Group, HDF5.File}, states...)`
 Save the states in the empty `hdf5_group`.
 This function should not mutate `states`
 
-#### `load_snapshot(step::Int, hdf5_group::HDF5.Group, states...) -> states...`
+#### `load_snapshot(step::Int, hdf5_group::Union{HDF5.Group, HDF5.File}, states...) -> states...`
 Load the states saved by `save_snapshot` `hdf5_group`
 This function can mutate `states`.
 `states` may be the states returned from `setup` or the `states` returned by `loop`.
 
+#### `done(step::Int, states...) -> done::Bool, expected_final_step::Int`
+Return true if the simulation is done, or false if `loop` should be called again.
+
+Also return the expected value of step when done will first be true, used for displaying the simulation progress.
+
+This function should not mutate `states`
+
+#### `loop(step::Int, states...) -> states...`
+Return the states that get passed to `save_snapshot`
+
+
+
 ### `Manifest.toml` and `Project.toml`
 
-These contain the julia environment used when running the simulation.
+These contain the julia environment used when running the simulation. These must contain HDF5 and JSON3, because these are required for saving data.
 
 ### `Job.toml`
 
 This file contains options for configuring the simulation runner.
 
-- `step_timeout`: the maximum amount of time each step is allowed to take before the job is killed.
+- `version`: `1.0` the `Job.toml` version.
+
+- `step_timeout`: the maximum amount of time in seconds each step is allowed to take before the job is killed.
 
 - `max_steps`: the maximum number of steps a job is allowed to take before the job is killed.
 
-- `startup_timeout`: the maximum amount of time to load everything and run the first loop.
+- `startup_timeout`: the maximum amount of time in seconds to load everything and run the first loop.
 
-- `max_snapshot_bytes`: the maximum amount of harddrive space each snapshot is allowed to use.
+- `max_snapshot_MB`: the maximum amount of hard drive space each snapshot is allowed to use in megabytes.
 
 
 ## `output` directory
@@ -90,7 +93,7 @@ The last element in each line is the sha256 of the line, not including the last 
 
 The first line is.
 ```
-version = 1.0.0, job_idx = 1, input_git_tree_sha1 = 5a936e..., 54bf8d69288...
+version = 1.0, job_idx = 1, input_git_tree_sha1 = 5a936e..., 54bf8d69288...
 ```
 - `version`: version of the info.txt format.
 - `job_idx`: index of the job. 
