@@ -26,7 +26,7 @@
 - startup-timeout
 - too-big-snapshot
 
-The following states can by detected by statically analysing the input and output directories.
+The following states can by detected by statically analyzing the input and output directories.
 - clean-partial : retry
 - corrupted-init-output : retry
 - corrupted-snapshot : retry
