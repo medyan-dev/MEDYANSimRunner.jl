@@ -9,17 +9,21 @@ Return true if the input_dir is valid.
 Otherwise log errors and return false.
 """
 function check_if_input_valid(input_dir::AbstractString)
-end
+    if !isdir(input_dir)
+        @error "input directory $input_dir not found."
+        return false
+    end
+    if !isfile(joinpath(input_dir,"Manifest.toml"))
+        @error "Manifest.toml missing from $input_dir."
+        return false
+    end
+    if !isfile(joinpath(input_dir,"Project.toml"))
+        @error "Project.toml missing from $input_dir."
+        return false
+    end
 
-"""
-Return the output directory status.
-
-Can be one of:
-1. :dne
-2. :empty
-3. :
-"""
-function check_if_ouput_status(output_dir::AbstractString, job_idx::Int)
+    try
+        isdir(input_dir)
 end
 
 
