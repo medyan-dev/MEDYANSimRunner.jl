@@ -2,32 +2,60 @@ module MEDYANSimRunner
 
 using LoggingExtras
 using Logging
+using TOML
 
 """
 Return true if the input_dir is valid.
 
 Otherwise log errors and return false.
 """
-function check_if_input_valid(input_dir::AbstractString)
+function input_dir_valid(input_dir::AbstractString)
     if !isdir(input_dir)
         @error "input directory $input_dir not found."
         return false
     end
-    if !isfile(joinpath(input_dir,"Manifest.toml"))
-        @error "Manifest.toml missing from $input_dir."
-        return false
-    end
-    if !isfile(joinpath(input_dir,"Project.toml"))
-        @error "Project.toml missing from $input_dir."
-        return false
-    end
+    required_toml_files = [
+        "Manifest.toml",
+        "Project.toml",
+        "Job.toml",
+    ]
+    required_files = [
+        required_toml_files;
+        "main.jl";
+    ]
+    # check that required files exist
+    iszero(sum(required_files) do required_file
+        if !isfile(joinpath(input_dir,required_file))
+            @error "$required_file missing from $input_dir."
+            true
+        else
+            false
+        end
+    end) || return false
 
-    try
-        isdir(input_dir)
+    # check that toml files don't have syntax errors
+    iszero(sum(required_toml_files) do required_toml_file
+        ex = TOML.tryparsefile(required_toml_file)
+        if ex isa TOML.ParserError
+            @error "invalid toml syntax." exception=ex
+            true
+        else
+            false
+        end
+    end) || return false
+
+    return true
 end
 
+"""
+Return a symbol representing the state of the `list.txt` file
+output_dir must exist.
+The options are:
+1. `:`
+"""
+function clean_list_file(jobout::AbstractString)
 
-
+end
 
 
 function main(input_dir::AbstractString, output_dir::AbstractString, job_idx::Int)
@@ -55,8 +83,14 @@ function main(input_dir::AbstractString, output_dir::AbstractString, job_idx::In
     )
     global_logger(logger)
 
+    is_input_dir_valid = input_dir_valid(input_dir)
+    if !is_input_dir_valid
+    input_git_tree_sha1 = Pkg.GitTools.tree_hash(input_dir)
+    
+
     # next check if input is valid
-    check_if_input_valid(input_dir) || exit()
+    if !input_dir_valid(input_dir)
+    end
 
  
 
