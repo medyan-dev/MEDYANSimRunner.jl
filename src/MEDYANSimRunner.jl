@@ -1,11 +1,14 @@
 module MEDYANSimRunner
 
+import Comonicon
+import InteractiveUtils
 using LoggingExtras
 using Logging
 using TOML
 using Dates
 using SHA
 using Distributed
+import Pkg
 import Random
 
 include("timeout.jl")
@@ -127,7 +130,7 @@ function parse_list_file(listpath::AbstractString)
     @assert isfile(listpath)
     rawlines = readlines(listpath)
     # remove lines that don't have a good checksum.
-    good_rawlines = Iterators.filter(rawlines) do rawline
+    good_rawlines = filter(rawlines) do rawline
         l = rsplit(rawline, ", "; limit=2)
         length(l) == 2 || return false
         linestr, linesha = l
@@ -211,8 +214,24 @@ function println_list(io::IO, str::AbstractString)
 end
 
 """
+start or continue a simulation job.
+
+# Args
+
+- `input_dir`: The input directory.
+- `output_dir`: The output directory.
+- `job_idx`: The job index for multi-job simulations, starts at 1.
+
+# Options
+
+- `--step_timeout`: max amount of time a step can take in seconds.
+- `--max_steps`: max number of steps.
+- `--startup_timeout`: max amount of time job startup can take in seconds.
+- `--max_snapshot_MB`: max amount of disk space one snapshot can take up.
+
+
 """
-function main(input_dir::AbstractString, output_dir::AbstractString, job_idx::Int;
+Comonicon.@main function main(input_dir::AbstractString, output_dir::AbstractString, job_idx::Int;
         step_timeout::Float64=100.0,
         max_steps::Int=1_000_000,
         startup_timeout::Float64=1000.0,
@@ -244,7 +263,7 @@ function main(input_dir::AbstractString, output_dir::AbstractString, job_idx::In
     # now start writing to a file every second to detect multiple processes trying to run the same job
     # any process that detects this should log an error and exit.
     detect_mult_runners_f = Base.Filesystem.open(joinpath(jobout, "detect-mult-process"), log_flags, log_perm)
-    detect_mult_runners_size = Ref(filesize(detect_mult_process_f))
+    detect_mult_runners_size = Ref(filesize(detect_mult_runners_f))
     Timer(0.0; interval=0.5) do t
         write(detect_mult_runners_f, 0x41)
         flush(detect_mult_runners_f)
@@ -286,8 +305,7 @@ function main(input_dir::AbstractString, output_dir::AbstractString, job_idx::In
     )[1]
 
     worker_nthreads = remotecall_fetch(Threads.nthreads, worker)
-    worker_versioninfo = remotecall_fetch(()->sprint(InteractiveUtils.versioninfo), worker)
-
+    worker_versioninfo = replace(sprint(InteractiveUtils.versioninfo), "\n"=>" ", ","=>" ")
     # list is empty start new job
     if iszero(list_info.job_idx)
         # delete stuff from dir and remake it
@@ -313,16 +331,13 @@ function main(input_dir::AbstractString, output_dir::AbstractString, job_idx::In
             import JSON3
             import HDF5
             import Random
-            info_logger = Logging.SimpleLogger(Base.Filesystem.open(joinpath($jobout,"info.log"), log_flags, log_perm), Logging.Info)
-            warn_logger = Logging.SimpleLogger(Base.Filesystem.open(joinpath($jobout,"warn.log"), log_flags, log_perm), Logging.Warn)
-            error_logger = Logging.SimpleLogger(Base.Filesystem.open(joinpath($jobout,"error.log"), log_flags, log_perm), Logging.Error)
-            logger = LoggingExtras.TeeLogger(
-                global_logger(),
-                info_logger,
-                warn_logger,
-                error_logger,
-            )
-            global_logger(logger)
+            LoggingExtras.TeeLogger(
+                Logging.global_logger(),
+                Logging.SimpleLogger(Base.Filesystem.open(joinpath($jobout,"info.log"),  $log_flags, $log_perm), Logging.Info),
+                Logging.SimpleLogger(Base.Filesystem.open(joinpath($jobout,"warn.log"),  $log_flags, $log_perm), Logging.Warn),
+                Logging.SimpleLogger(Base.Filesystem.open(joinpath($jobout,"error.log"), $log_flags, $log_perm), Logging.Error),
+            ) |> Logging.global_logger
+            
 
             """
             Return a string describing the state of the rng without any newlines or commas
@@ -339,7 +354,7 @@ function main(input_dir::AbstractString, output_dir::AbstractString, job_idx::In
             const $worker_rng_str1 = Ref("")
 
             include("main.jl")
-            job_header, state =  setup(job_idx)
+            job_header, state =  setup($job_idx)
             open(joinpath($jobout,"header.json"), "w") do io
                 JSON3.pretty(io, job_header)
             end
@@ -357,7 +372,7 @@ function main(input_dir::AbstractString, output_dir::AbstractString, job_idx::In
                 load_snapshot(step, job_file, state)
             end
             isdone::Bool, expected_final_step::Int64 = done(step, state)
-            isdone, expected_final_step, worker_rng_str0[], worker_rng_str1[]
+            isdone, expected_final_step, $worker_rng_str0[], $worker_rng_str1[]
         end)
         if status != :ok
             @error "failed to startup, status: $status"
@@ -400,7 +415,7 @@ function main(input_dir::AbstractString, output_dir::AbstractString, job_idx::In
             println_list(list_file, "Done")
             exit()
         end
-        @info "Step 1 of $(results[2]) done"
+        @info "Step 1 of $(result[2]) done"
 
         step = 1
         while step < max_steps
@@ -413,7 +428,7 @@ function main(input_dir::AbstractString, output_dir::AbstractString, job_idx::In
                     load_snapshot(step, job_file, state)
                 end
                 isdone::Bool, expected_final_step::Int64 = done(step, state)
-                isdone, expected_final_step, worker_rng_str0[]
+                isdone, expected_final_step, $worker_rng_str0[]
             end)
             step += 1
             if status != :ok
@@ -439,6 +454,8 @@ function main(input_dir::AbstractString, output_dir::AbstractString, job_idx::In
                 $(result[3]), \
                 $(bytes2hex(snapshot_sha256))"
             )
+            @info "Step $step of $(result[2]) done"
+
             if result[1]
                 @info "simulation completed"
                 println_list(list_file, "Done")
