@@ -26,6 +26,7 @@ end
 
 function save_snapshot(step::Int, hdf5_group, state)
     hdf5_group["states"] = state
+    @info "saving states" state
 end
 
 function load_snapshot(step::Int, hdf5_group, state)
@@ -34,7 +35,7 @@ function load_snapshot(step::Int, hdf5_group, state)
 end
 
 function done(step::Int, state)
-    step > 1000, 1001
+    step > 100, 101
 end
 
 function loop(step::Int, state)

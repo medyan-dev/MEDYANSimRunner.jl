@@ -13,6 +13,12 @@ import Random
 
 include("timeout.jl")
 
+const DATE_FORMAT = dateformat"yyyy-mm-dd HH:MM:SS"
+
+timestamp_logger(logger) = TransformerLogger(logger) do log
+    merge(log, (; message = "$(Dates.format(now(), DATE_FORMAT)) $(log.message)"))
+end
+
 
 
 """
@@ -30,7 +36,7 @@ end
 """
 Decode an rng stored in a string.
 """
-function str_2_rng(str::String)::Random.AbstractRNG
+function str_2_rng(str::AbstractString)::Random.AbstractRNG
     parts = split(str, " ")
     parts[1] == "Xoshiro:" || error("rng type must be Xoshiro not $(parts[1])")
     state = parse.(UInt64, parts[2:end])
@@ -93,14 +99,14 @@ Base.@kwdef struct SnapshotInfoV1
 end
 
 
-function parse_snapshot_info_v1(line::Vector{String})::SnapshotInfoV1
+function parse_snapshot_info_v1(line::Vector{<:AbstractString})::SnapshotInfoV1
     SnapshotInfoV1(;
-        time_stamp = DateTime(line[1], dateformat"yyyy-mm-dd HH:MM:SS"),
+        time_stamp = DateTime(line[1], DATE_FORMAT),
         step_number = parse(Int, line[2]),
         nthreads = parse(Int, line[3]),
         julia_versioninfo = line[4],
         rngstate = str_2_rng(line[5]),
-        snapshot_sha256 = hex2bytes(lines[6]),
+        snapshot_sha256 = hex2bytes(line[6]),
     )
 end
 
@@ -112,7 +118,7 @@ Base.@kwdef struct ListFileV1
     job_idx::Int = 0
     input_git_tree_sha1::Vector{UInt8} = []
     header_sha256::Vector{UInt8} = []
-    snapshots::Vector{SnapshotInfoV1} = []
+    snapshot_infos::Vector{SnapshotInfoV1} = []
     final_message::String = ""
 end
 
@@ -182,13 +188,16 @@ function parse_list_file(listpath::AbstractString)
     if isempty(final_message) && length(lines) < 4
         return ListFileV1()
     end
-
-    secondlineparts = split.(lines[begin+1], " = ")
-    if secondlineparts[1][1] != "header_sha256"
-        error("expected \"header_sha256\" got $(secondlineparts[1][1])")
+    
+    if length(lines[begin+1]) != 1
+        error("second line should just be header_sha265")
+    end
+    secondlineparts = split(lines[begin+1][1], " = ")
+    if secondlineparts[1] != "header_sha256"
+        error("expected \"header_sha256\" got $(secondlineparts[1])")
     end
 
-    header_sha256 = hex2bytes(secondlineparts[1][1])
+    header_sha256 = hex2bytes(secondlineparts[2])
 
     num_snapshots = length(lines) - 2 - !isempty(final_message)
     @assert num_snapshots ≥ 0
@@ -249,14 +258,14 @@ Comonicon.@main function main(input_dir::AbstractString, output_dir::AbstractStr
     log_perm = Base.Filesystem.S_IROTH | Base.Filesystem.S_IRGRP | Base.Filesystem.S_IWGRP | Base.Filesystem.S_IRUSR | Base.Filesystem.S_IWUSR
 
     # next set up logging
-    info_logger = SimpleLogger(Base.Filesystem.open(joinpath(jobout,"info.log"), log_flags, log_perm), Logging.Info)
-    warn_logger = SimpleLogger(Base.Filesystem.open(joinpath(jobout,"warn.log"), log_flags, log_perm), Logging.Warn)
-    error_logger = SimpleLogger(Base.Filesystem.open(joinpath(jobout,"error.log"), log_flags, log_perm), Logging.Error)
+    info_logger = ConsoleLogger(Base.Filesystem.open(joinpath(jobout,"info.log"), log_flags, log_perm), Logging.Info)
+    warn_logger = ConsoleLogger(Base.Filesystem.open(joinpath(jobout,"warn.log"), log_flags, log_perm), Logging.Warn)
+    error_logger = ConsoleLogger(Base.Filesystem.open(joinpath(jobout,"error.log"), log_flags, log_perm), Logging.Error)
     logger = TeeLogger(
         global_logger(),
-        info_logger,
-        warn_logger,
-        error_logger,
+        timestamp_logger(info_logger),
+        timestamp_logger(warn_logger),
+        timestamp_logger(error_logger),
     )
     global_logger(logger)
 
@@ -284,6 +293,7 @@ Comonicon.@main function main(input_dir::AbstractString, output_dir::AbstractStr
         parse_list_file(joinpath(jobout,"list.txt"))
     catch ex
         @error "invalid list.txt syntax." exception=ex
+        rethrow()
         exit(1)
     end
 
@@ -324,18 +334,20 @@ Comonicon.@main function main(input_dir::AbstractString, output_dir::AbstractStr
         @gensym worker_rng_str0
         @gensym worker_rng_str1
         status, result = run_with_timeout(worker, startup_timeout, quote
-            using Pkg; Pkg.instantiate()
-            import Dates
+            filter!(LOAD_PATH) do path
+                path != "@v#.#"
+            end;
+            import Pkg; Pkg.instantiate()
             import LoggingExtras
             import Logging
             import JSON3
             import HDF5
             import Random
             LoggingExtras.TeeLogger(
-                Logging.global_logger(),
-                Logging.SimpleLogger(Base.Filesystem.open(joinpath($jobout,"info.log"),  $log_flags, $log_perm), Logging.Info),
-                Logging.SimpleLogger(Base.Filesystem.open(joinpath($jobout,"warn.log"),  $log_flags, $log_perm), Logging.Warn),
-                Logging.SimpleLogger(Base.Filesystem.open(joinpath($jobout,"error.log"), $log_flags, $log_perm), Logging.Error),
+                # Logging.global_logger(),
+                Logging.ConsoleLogger(Base.Filesystem.open(joinpath($jobout,"info.log"),  $log_flags, $log_perm), Logging.Info),
+                Logging.ConsoleLogger(Base.Filesystem.open(joinpath($jobout,"warn.log"),  $log_flags, $log_perm), Logging.Warn),
+                Logging.ConsoleLogger(Base.Filesystem.open(joinpath($jobout,"error.log"), $log_flags, $log_perm), Logging.Error),
             ) |> Logging.global_logger
             
 
@@ -387,12 +399,12 @@ Comonicon.@main function main(input_dir::AbstractString, output_dir::AbstractStr
         header_sha256 = open(joinpath(jobout,"header.json")) do io
             sha256(io)
         end
-        println_list(list_file, "header_sha256 = $header_sha256")
+        println_list(list_file, "header_sha256 = $(bytes2hex(header_sha256))")
         snapshot0_sha256 = open(joinpath(jobout,"snapshots","snapshot0.h5")) do io
             sha256(io)
         end
         println_list(list_file,
-            "$(Dates.format(now(),dateformat"yyyy-mm-dd HH:MM:SS")), \
+            "$(Dates.format(now(),DATE_FORMAT)), \
             0, \
             $worker_nthreads, \
             $worker_versioninfo, \
@@ -403,7 +415,7 @@ Comonicon.@main function main(input_dir::AbstractString, output_dir::AbstractStr
             sha256(io)
         end
         println_list(list_file,
-            "$(Dates.format(now(),dateformat"yyyy-mm-dd HH:MM:SS")), \
+            "$(Dates.format(now(),DATE_FORMAT)), \
             1, \
             $worker_nthreads, \
             $worker_versioninfo, \
@@ -447,7 +459,7 @@ Comonicon.@main function main(input_dir::AbstractString, output_dir::AbstractStr
                 sha256(io)
             end
             println_list(list_file,
-                "$(Dates.format(now(),dateformat"yyyy-mm-dd HH:MM:SS")), \
+                "$(Dates.format(now(),DATE_FORMAT)), \
                 $step, \
                 $worker_nthreads, \
                 $worker_versioninfo, \
