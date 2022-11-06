@@ -12,14 +12,21 @@ using Distributed
 
 
 """
+    run_with_timeout(worker::Int, timeout::Float64, expr::Expr; verbose=true, poll=0.1)
+
 Run code on a worker in `Main` with a time out in seconds and return the result.
 The worker must be on the same computer.
 
-Will return one of three possibilities.
+Will return one of four possibilities.
 1. `(:timed_out, nothing)`
-2. `(:errored, sprint(showerror, real_e, real_bt))`
-3. `(:ok, fetched_value)`
+2. `(:worker_exited, nothing)`
+3. `(:errored, sprint(showerror, real_e, real_bt))`
+4. `(:ok, fetched_value)`
 
+If the status is :timed_out or :worker_exited, `worker` will no longer be available.
+
+This function can also error if `expr` causes something 
+to be returned which cannot be interpreted on the master process.
 """
 function run_with_timeout(worker::Int, timeout::Float64, expr::Expr; verbose=true, poll=0.1)
     nprocs() > 1 || throw(ArgumentError("No worker processes available"))
@@ -44,23 +51,17 @@ function run_with_timeout(worker::Int, timeout::Float64, expr::Expr; verbose=tru
         put!(ch, remotecall_fetch(Core.eval, worker, Main, expr))
     end
 
-    timedout = timedwait(timeout; poll) do
+    timedout = timedwait(timeout; pollint=poll) do
         # isready becomes true if put! happens, !isopen becomes true if channel has an error
         isready(channel) || !isopen(channel)
     end
 
     if timedout == :timed_out
-        verbose && @warn "Time limit for computation exceeded. Interrupting..."
-        patience = 10
-        while isopen(channel) && (patience -= 1) > 0
-            interrupt(worker)
-        end
-        # If our interrupts didn't work, forcibly kill the process
-        if isopen(channel)
-            rc = ccall(:uv_kill, Cint, (Cint, Cint), ospid, SIGTERM)
-            rc == 0 || throw(_UVError("kill", rc))
-        end
+        verbose && @warn "Time limit for computation exceeded, forcibly kill the worker process..."
+        rc = ccall(:uv_kill, Cint, (Cint, Cint), ospid, SIGTERM)
+        rc == 0 || throw(_UVError("kill", rc))
         close(channel)
+        rmprocs(worker)
         return (:timed_out, nothing)
     end
 
@@ -69,9 +70,16 @@ function run_with_timeout(worker::Int, timeout::Float64, expr::Expr; verbose=tru
         return (:ok, take!(channel))
     catch e
         if e isa TaskFailedException
-            real_e = e.task.result.captured.ex
-            real_bt = e.task.result.captured.processed_bt
-            return (:errored, sprint(showerror, real_e, real_bt))
+            result_error = e.task.result
+            if result_error isa RemoteException
+                real_e = e.task.result.captured.ex
+                real_bt = e.task.result.captured.processed_bt
+                return (:errored, sprint(showerror, real_e, real_bt))
+            elseif result_error isa ProcessExitedException
+                return (:worker_exited, nothing)
+            else
+                rethrow()
+            end
         else
             rethrow()
         end

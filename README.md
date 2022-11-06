@@ -3,9 +3,19 @@ Manage long running MEDYAN.jl simulations
 
 Simulations run using code stored in the `input` directory and write outputs to `output` directory.
 
+## input kwargs
+
+- `step_timeout`: the maximum amount of time in seconds each step is allowed to take before the job is killed.
+
+- `max_steps`: the maximum number of steps a job is allowed to take before the job is killed.
+
+- `startup_timeout`: the maximum amount of time in seconds to load everything and run the first loop.
+
+- `max_snapshot_MB`: the maximum amount of hard drive space each snapshot is allowed to use in megabytes.
+
 ## `input` directory
 
-The input directory must contain a `main.jl` file, a `Manifest.toml`, a `Project.toml`, and a `Job.toml`.
+The input directory must contain a `main.jl` file, a `Manifest.toml`, and a `Project.toml`.
 
 The input directory will be the working directory of the simulation and can include other data needed for the simulation, including an `Artifacts.toml`
 
@@ -58,36 +68,30 @@ These contain the julia environment used when running the simulation. These must
 activate and instantiate the environment
 include("main.jl")
 create output directory if it doesn't exist
-header, state =  setup(job_idx)
-save header
+job_header, state =  setup(job_idx)
+save job_header
 step = 0
-file = create snapshot file(step)
-save_snapshot(step, file, state)
+job_file = create snapshot file(step)
+save_snapshot(step, job_file, state)
+state = load_snapshot(step, job_file, state)
+close(job_file)
 while true
-    state = load_snapshot(step, file, state)
-    close(file)
     state = loop(step, state)
     step = step + 1
-    file = create snapshot file(step)
-    save_snapshot(step, file, state)
-    if done(step::Int, state)
+    job_file = create snapshot file(step)
+    save_snapshot(step, job_file, state)
+    state = load_snapshot(step, job_file, state)
+    close(job_file)
+    if done(step::Int, state)[1]
         break
     end
 end
+    
+    
+
+end
 ```
-### `Job.toml`
 
-This file contains options for configuring the simulation runner.
-
-- `version`: `1.0` the `Job.toml` version.
-
-- `step_timeout`: the maximum amount of time in seconds each step is allowed to take before the job is killed.
-
-- `max_steps`: the maximum number of steps a job is allowed to take before the job is killed.
-
-- `startup_timeout`: the maximum amount of time in seconds to load everything and run the first loop.
-
-- `max_snapshot_MB`: the maximum amount of hard drive space each snapshot is allowed to use in megabytes.
 
 
 ## `output` directory
@@ -149,19 +153,19 @@ Error running job, line sha256
 ```
 
 ```
-Error startup_timeout reached, line sha256
+Error startup_timeout of $startup_timeout seconds reached, line sha256
 ```
 
 ```
-Error step_timeout reached, line sha256
+Error step_timeout of $step_timeout seconds reached, line sha256
 ```
 
 ```
-Error max_steps reached, line sha256
+Error max_steps of $max_steps steps reached, line sha256
 ```
 
 ```
-Error max_snapshot_bytes reached, line sha256
+Error max_snapshot_MB of $max_snapshot_MB MB reached, line sha256
 ```
 
 ```
