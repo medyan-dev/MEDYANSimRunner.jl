@@ -201,12 +201,7 @@ Comonicon.@main function main(input_dir::AbstractString, output_dir::AbstractStr
         )
 
         @info "starting up simulation"
-        @gensym worker_rng_2_str
-        @gensym worker_rng_str0
-        @gensym worker_rng_str1
-        @gensym worker_timestamp_logger
-        @gensym worker_rng_copy
-        status, result = run_with_timeout(worker, startup_timeout, quote
+        status, result = run_with_timeout(worker, startup_timeout, Expr(:toplevel, (quote
             filter!(LOAD_PATH) do path
                 path != "@v#.#"
             end;
@@ -217,21 +212,21 @@ Comonicon.@main function main(input_dir::AbstractString, output_dir::AbstractStr
             import JSON3
             import HDF5
             import Random
-            $worker_timestamp_logger(logger) = LoggingExtras.TransformerLogger(logger) do log
+            worker_timestamp_logger(logger) = LoggingExtras.TransformerLogger(logger) do log
                 merge(log, (; message = "$(Dates.format(Dates.now(), $DATE_FORMAT)) $(log.message)"))
             end            
             LoggingExtras.TeeLogger(
                 # Logging.global_logger(),
-                $worker_timestamp_logger(Logging.ConsoleLogger(Base.Filesystem.open(joinpath($jobout,"info.log"),  $log_flags, $log_perm), Logging.Info)),
-                $worker_timestamp_logger(Logging.ConsoleLogger(Base.Filesystem.open(joinpath($jobout,"warn.log"),  $log_flags, $log_perm), Logging.Warn)),
-                $worker_timestamp_logger(Logging.ConsoleLogger(Base.Filesystem.open(joinpath($jobout,"error.log"), $log_flags, $log_perm), Logging.Error)),
+                worker_timestamp_logger(Logging.ConsoleLogger(Base.Filesystem.open(joinpath($jobout,"info.log"),  $log_flags, $log_perm), Logging.Info)),
+                worker_timestamp_logger(Logging.ConsoleLogger(Base.Filesystem.open(joinpath($jobout,"warn.log"),  $log_flags, $log_perm), Logging.Warn)),
+                worker_timestamp_logger(Logging.ConsoleLogger(Base.Filesystem.open(joinpath($jobout,"error.log"), $log_flags, $log_perm), Logging.Error)),
             ) |> Logging.global_logger
             
 
             """
             Return a string describing the state of the rng without any newlines or commas
             """
-            function $worker_rng_2_str(rng = Random.default_rng())::String
+            function worker_rng_2_str(rng = Random.default_rng())::String
                 myrng = copy(rng)
                 if typeof(myrng)==Random.Xoshiro
                     "Xoshiro: $(repr(myrng.s0)) $(repr(myrng.s1)) $(repr(myrng.s2)) $(repr(myrng.s3))"
@@ -239,32 +234,33 @@ Comonicon.@main function main(input_dir::AbstractString, output_dir::AbstractStr
                     error("rng of type $(typeof(myrng)) not supported yet")
                 end
             end
-            const $worker_rng_str0 = Ref("")
-            const $worker_rng_str1 = Ref("")
-            const $worker_rng_copy = copy(Random.default_rng())
-
-            include("main.jl")
-            job_header, state =  setup($job_idx)
+            const worker_rng_str0 = Ref("")
+            const worker_rng_str1 = Ref("")
+            const worker_rng_copy = copy(Random.default_rng())
+            module UserCode
+                include("main.jl")
+            end
+            job_header, state =  UserCode.setup($job_idx)
             open(joinpath($jobout,"header.json"), "w") do io
                 JSON3.pretty(io, job_header)
             end
-            step = 0
+            step::Int = 0
             state = HDF5.h5open(joinpath($jobout,"snapshots","snapshot$step.h5"), "w") do job_file
-                save_snapshot(step, job_file, state)
-                $worker_rng_str0[] = $worker_rng_2_str()
-                load_snapshot(step, job_file, state)
+                UserCode.save_snapshot(step, job_file, state)
+                worker_rng_str0[] = worker_rng_2_str()
+                UserCode.load_snapshot(step, job_file, state)
             end
-            state = loop(step, state)
+            state = UserCode.loop(step, state)
             step += 1
             state = HDF5.h5open(joinpath($jobout,"snapshots","snapshot$step.h5"), "w") do job_file
-                save_snapshot(step, job_file, state)
-                $worker_rng_str1[] = $worker_rng_2_str()
-                load_snapshot(step, job_file, state)
+                UserCode.save_snapshot(step, job_file, state)
+                worker_rng_str1[] = worker_rng_2_str()
+                UserCode.load_snapshot(step, job_file, state)
             end
-            isdone::Bool, expected_final_step::Int64 = done(step, state)
-            copy!($worker_rng_copy, Random.default_rng())
-            isdone, expected_final_step, $worker_rng_str0[], $worker_rng_str1[]
-        end)
+            isdone::Bool, expected_final_step::Int64 = UserCode.done(step, state)
+            copy!(worker_rng_copy, Random.default_rng())
+            isdone, expected_final_step, worker_rng_str0[], worker_rng_str1[]
+        end).args...))
         if status != :ok
             @error "failed to startup, status: $status"
             if status === :timed_out
@@ -311,17 +307,17 @@ Comonicon.@main function main(input_dir::AbstractString, output_dir::AbstractStr
         step = 1
         while step < max_steps
             status, result = run_with_timeout(worker, step_timeout, quote
-                copy!(Random.default_rng(), $worker_rng_copy)
-                state = loop(step, state)
+                copy!(Random.default_rng(), worker_rng_copy)
+                state = UserCode.loop(step, state)
                 step += 1
                 state = HDF5.h5open(joinpath($jobout,"snapshots","snapshot$step.h5"), "w") do job_file
-                    save_snapshot(step, job_file, state)
-                    $worker_rng_str0[] = $worker_rng_2_str()
-                    load_snapshot(step, job_file, state)
+                    UserCode.save_snapshot(step, job_file, state)
+                    worker_rng_str0[] = worker_rng_2_str()
+                    UserCode.load_snapshot(step, job_file, state)
                 end
-                isdone::Bool, expected_final_step::Int64 = done(step, state)
-                copy!($worker_rng_copy, Random.default_rng())
-                isdone, expected_final_step, $worker_rng_str0[]
+                isdone::Bool, expected_final_step::Int64 = UserCode.done(step, state)
+                copy!(worker_rng_copy, Random.default_rng())
+                isdone, expected_final_step, worker_rng_str0[]
             end)
             step += 1
             if status != :ok
