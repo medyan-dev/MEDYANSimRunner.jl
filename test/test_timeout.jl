@@ -5,7 +5,7 @@ using Distributed
 using MEDYANSimRunner
 
 
-@testset "normal cases" begin
+@testset "timeout normal cases" begin
     worker = addprocs(1;
         topology=:master_worker,
     )[1]
