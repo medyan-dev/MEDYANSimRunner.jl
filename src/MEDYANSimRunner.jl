@@ -15,12 +15,6 @@ include("timeout.jl")
 
 const DATE_FORMAT = dateformat"yyyy-mm-dd HH:MM:SS"
 
-timestamp_logger(logger) = TransformerLogger(logger) do log
-    merge(log, (; message = "$(Dates.format(now(), DATE_FORMAT)) $(log.message)"))
-end
-
-
-
 """
 Return a string describing the state of the rng without any newlines or commas
 """
@@ -41,6 +35,12 @@ function str_2_rng(str::AbstractString)::Random.AbstractRNG
     parts[1] == "Xoshiro:" || error("rng type must be Xoshiro not $(parts[1])")
     state = parse.(UInt64, parts[2:end])
     Random.Xoshiro(state...)
+end
+
+include("listparse.jl")
+
+timestamp_logger(logger) = TransformerLogger(logger) do log
+    merge(log, (; message = "$(Dates.format(now(), DATE_FORMAT)) $(log.message)"))
 end
 
 """
@@ -85,134 +85,6 @@ function is_input_dir_valid(input_dir::AbstractString)
     return true
 end
 
-
-"""
-Represents a snapshot in a parsed list.txt file.
-"""
-Base.@kwdef struct SnapshotInfoV1
-    time_stamp::DateTime
-    step_number::Int
-    nthreads::Int
-    julia_versioninfo::String
-    rngstate::Random.Xoshiro
-    snapshot_sha256::Vector{UInt8}
-end
-
-
-function parse_snapshot_info_v1(line::Vector{<:AbstractString})::SnapshotInfoV1
-    SnapshotInfoV1(;
-        time_stamp = DateTime(line[1], DATE_FORMAT),
-        step_number = parse(Int, line[2]),
-        nthreads = parse(Int, line[3]),
-        julia_versioninfo = line[4],
-        rngstate = str_2_rng(line[5]),
-        snapshot_sha256 = hex2bytes(line[6]),
-    )
-end
-
-
-"""
-Represents a parsed list.txt file.
-"""
-Base.@kwdef struct ListFileV1
-    job_idx::Int = 0
-    input_git_tree_sha1::Vector{UInt8} = []
-    header_sha256::Vector{UInt8} = []
-    snapshot_infos::Vector{SnapshotInfoV1} = []
-    final_message::String = ""
-end
-
-
-"""
-Parse a list file. 
-Return a ListFileV1 if successful,
-If the file doesn't exist or is too short, return an empty ListFileV1.
-If there is some error parsing, throw an error.
-"""
-function parse_list_file(listpath::AbstractString)
-    if !isfile(listpath)
-        return ListFileV1()
-    end
-    @assert isfile(listpath)
-    rawlines = readlines(listpath)
-    # remove lines that don't have a good checksum.
-    good_rawlines = filter(rawlines) do rawline
-        l = rsplit(rawline, ", "; limit=2)
-        length(l) == 2 || return false
-        linestr, linesha = l
-        reallinesha = bytes2hex(sha256(linestr))
-        reallinesha == linesha
-    end
-    
-    # Return empty list file if too short
-    if length(good_rawlines) < 2
-        return ListFileV1()
-    end
-
-    lines = map(good_rawlines) do good_rawline
-        split(good_rawline, ", ")[begin:end-1]
-    end
-    firstlineparts = split.(lines[begin], " = ")
-    if firstlineparts[1] != ["version","1"]
-        error("list file has bad version")
-    end
-
-    # now try and parse first line
-    if firstlineparts[2][1] != "job_idx"
-        error("expected \"job_idx\" got $(firstlineparts[2][1])")
-    end
-    job_idx = parse(Int, firstlineparts[2][2])
-    if firstlineparts[3][1] != "input_git_tree_sha1"
-        error("expected \"input_git_tree_sha1\" got $(firstlineparts[3][1])")
-    end
-    input_git_tree_sha1 = hex2bytes(firstlineparts[3][2])
-
-    # check if last line is error or done
-    maybemessage = lines[end][1]
-    final_message = if startswith(maybemessage, "Error") || startswith(maybemessage, "Done")
-        maybemessage
-    else
-        ""
-    end
-
-    # error before header file written
-    if length(lines) == 2 && !isempty(final_message)
-        return ListFileV1(;
-            job_idx,
-            input_git_tree_sha1,
-            final_message,
-        )
-    end
-
-    # too few snapshots, not finished
-    if isempty(final_message) && length(lines) < 4
-        return ListFileV1()
-    end
-    
-    if length(lines[begin+1]) != 1
-        error("second line should just be header_sha265")
-    end
-    secondlineparts = split(lines[begin+1][1], " = ")
-    if secondlineparts[1] != "header_sha256"
-        error("expected \"header_sha256\" got $(secondlineparts[1])")
-    end
-
-    header_sha256 = hex2bytes(secondlineparts[2])
-
-    num_snapshots = length(lines) - 2 - !isempty(final_message)
-    @assert num_snapshots ≥ 0
-    snapshot_infos = map(1:num_snapshots) do i
-        parse_snapshot_info_v1(lines[i+2])
-    end
-    return ListFileV1(;
-        job_idx,
-        input_git_tree_sha1,
-        header_sha256,
-        snapshot_infos,
-        final_message,
-    )    
-end
-
 """
 Print a `str` and add ", (hex sha256 of the line)\n", and then flush
 """
@@ -223,7 +95,7 @@ function println_list(io::IO, str::AbstractString)
 end
 
 """
-start or continue a simulation job.
+Start or continue a simulation job.
 
 # Args
 
@@ -237,7 +109,6 @@ start or continue a simulation job.
 - `--max_steps`: max number of steps.
 - `--startup_timeout`: max amount of time job startup can take in seconds.
 - `--max_snapshot_MB`: max amount of disk space one snapshot can take up.
-
 
 """
 Comonicon.@main function main(input_dir::AbstractString, output_dir::AbstractString, job_idx::Int;
@@ -333,21 +204,27 @@ Comonicon.@main function main(input_dir::AbstractString, output_dir::AbstractStr
         @gensym worker_rng_2_str
         @gensym worker_rng_str0
         @gensym worker_rng_str1
+        @gensym worker_timestamp_logger
+        @gensym worker_rng_copy
         status, result = run_with_timeout(worker, startup_timeout, quote
             filter!(LOAD_PATH) do path
                 path != "@v#.#"
             end;
             import Pkg; Pkg.instantiate()
+            import Dates
             import LoggingExtras
             import Logging
             import JSON3
             import HDF5
             import Random
+            $worker_timestamp_logger(logger) = LoggingExtras.TransformerLogger(logger) do log
+                merge(log, (; message = "$(Dates.format(Dates.now(), $DATE_FORMAT)) $(log.message)"))
+            end            
             LoggingExtras.TeeLogger(
                 # Logging.global_logger(),
-                Logging.ConsoleLogger(Base.Filesystem.open(joinpath($jobout,"info.log"),  $log_flags, $log_perm), Logging.Info),
-                Logging.ConsoleLogger(Base.Filesystem.open(joinpath($jobout,"warn.log"),  $log_flags, $log_perm), Logging.Warn),
-                Logging.ConsoleLogger(Base.Filesystem.open(joinpath($jobout,"error.log"), $log_flags, $log_perm), Logging.Error),
+                $worker_timestamp_logger(Logging.ConsoleLogger(Base.Filesystem.open(joinpath($jobout,"info.log"),  $log_flags, $log_perm), Logging.Info)),
+                $worker_timestamp_logger(Logging.ConsoleLogger(Base.Filesystem.open(joinpath($jobout,"warn.log"),  $log_flags, $log_perm), Logging.Warn)),
+                $worker_timestamp_logger(Logging.ConsoleLogger(Base.Filesystem.open(joinpath($jobout,"error.log"), $log_flags, $log_perm), Logging.Error)),
             ) |> Logging.global_logger
             
 
@@ -364,6 +241,7 @@ Comonicon.@main function main(input_dir::AbstractString, output_dir::AbstractStr
             end
             const $worker_rng_str0 = Ref("")
             const $worker_rng_str1 = Ref("")
+            const $worker_rng_copy = copy(Random.default_rng())
 
             include("main.jl")
             job_header, state =  setup($job_idx)
@@ -384,6 +262,7 @@ Comonicon.@main function main(input_dir::AbstractString, output_dir::AbstractStr
                 load_snapshot(step, job_file, state)
             end
             isdone::Bool, expected_final_step::Int64 = done(step, state)
+            copy!($worker_rng_copy, Random.default_rng())
             isdone, expected_final_step, $worker_rng_str0[], $worker_rng_str1[]
         end)
         if status != :ok
@@ -432,6 +311,7 @@ Comonicon.@main function main(input_dir::AbstractString, output_dir::AbstractStr
         step = 1
         while step < max_steps
             status, result = run_with_timeout(worker, step_timeout, quote
+                copy!(Random.default_rng(), $worker_rng_copy)
                 state = loop(step, state)
                 step += 1
                 state = HDF5.h5open(joinpath($jobout,"snapshots","snapshot$step.h5"), "w") do job_file
@@ -440,6 +320,7 @@ Comonicon.@main function main(input_dir::AbstractString, output_dir::AbstractStr
                     load_snapshot(step, job_file, state)
                 end
                 isdone::Bool, expected_final_step::Int64 = done(step, state)
+                copy!($worker_rng_copy, Random.default_rng())
                 isdone, expected_final_step, $worker_rng_str0[]
             end)
             step += 1

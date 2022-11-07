@@ -3,6 +3,12 @@ Manage long running MEDYAN.jl simulations
 
 Simulations run using code stored in the `input` directory and write outputs to `output` directory.
 
+## Example
+Run the following in the root of this project.
+```sh
+mkdir test/examples/good/output
+julia --project -e 'import MEDYANSimRunner; MEDYANSimRunner.command_main(["test/examples/good/input","test/examples/good/output","1"])'
+```
 ## input kwargs
 
 - `step_timeout`: the maximum amount of time in seconds each step is allowed to take before the job is killed.
