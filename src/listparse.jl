@@ -37,13 +37,13 @@ end
 
 """
 Parse a list file. 
-Return a ListFileV1 if successful,
+Return a ListFileV1, and a vector of the good lines of the file, if successful,
 If the file doesn't exist or is too short, return an empty ListFileV1.
 If there is some error parsing, throw an error.
 """
 function parse_list_file(listpath::AbstractString)
     if !isfile(listpath)
-        return ListFileV1()
+        return ListFileV1(), String[]
     end
     @assert isfile(listpath)
     rawlines = readlines(listpath)
@@ -58,7 +58,7 @@ function parse_list_file(listpath::AbstractString)
     
     # Return empty list file if too short
     if length(good_rawlines) < 2
-        return ListFileV1()
+        return ListFileV1(), String[]
     end
 
     lines = map(good_rawlines) do good_rawline
@@ -66,6 +66,7 @@ function parse_list_file(listpath::AbstractString)
     end
     firstlineparts = split.(lines[begin], " = ")
     if firstlineparts[1] != ["version","1"]
+        @error firstlineparts[1]
         error("list file has bad version")
     end
 
@@ -93,12 +94,12 @@ function parse_list_file(listpath::AbstractString)
             job_idx,
             input_git_tree_sha1,
             final_message,
-        )
+        ), good_rawlines
     end
 
     # too few snapshots, not finished
     if isempty(final_message) && length(lines) < 4
-        return ListFileV1()
+        return ListFileV1(), String[]
     end
     
     if length(lines[begin+1]) != 1
@@ -122,5 +123,5 @@ function parse_list_file(listpath::AbstractString)
         header_sha256,
         snapshot_infos,
         final_message,
-    )    
+    ), good_rawlines
 end
