@@ -114,12 +114,12 @@ Start or continue a simulation job.
 - `--max_snapshot_MB`: max amount of disk space one snapshot can take up.
 
 """
-Comonicon.@main function main(input_dir::AbstractString, output_dir::AbstractString, job_idx::Int;
+Comonicon.@main function run(input_dir::AbstractString, output_dir::AbstractString, job_idx::Int;
         step_timeout::Float64=100.0,
         max_steps::Int=1_000_000,
         startup_timeout::Float64=1000.0,
         max_snapshot_MB::Float64=1E3,
-    )
+    )::Int
     job_idx > 0 || throw(ArgumentError("job_idx must be greater than 0"))
 
     # first make the output folder
@@ -160,7 +160,7 @@ Comonicon.@main function main(input_dir::AbstractString, output_dir::AbstractStr
 
     input_dir_valid = is_input_dir_valid(input_dir)
     if !input_dir_valid
-        exit(1)
+        return 1
     end
     
     list_info, list_file_good_lines = try
@@ -168,14 +168,14 @@ Comonicon.@main function main(input_dir::AbstractString, output_dir::AbstractStr
     catch ex
         @error "invalid list.txt syntax." exception=ex
         rethrow()
-        exit(1)
+        return 1
     end
 
     # check if simulation is aready done
     # note: this doesn't validate the snapshot files, or input files.
     if !isempty(list_info.final_message)
         @info "simulation already complete, exiting"
-        exit()
+        return 0
     end
 
     input_git_tree_sha1 = Pkg.GitTools.tree_hash(input_dir)
@@ -291,7 +291,7 @@ Comonicon.@main function main(input_dir::AbstractString, output_dir::AbstractStr
                 @error result
                 println_list(list_file, "Error starting job")
             end
-            exit(1)
+            return 1
         end
         worker_versioninfo = result[5]
         header_sha256 = open(joinpath(jobout,"header.json")) do io
@@ -323,21 +323,21 @@ Comonicon.@main function main(input_dir::AbstractString, output_dir::AbstractStr
         if result[1]
             @info "simulation completed"
             println_list(list_file, "Done")
-            exit()
+            return 0
         end
         step = 1
-        @info "Step 1 of $(result[2]) done"
+        @info "step 1 of $(result[2]) done"
     else
         # Continue from an old job
         @info "continuing job"
         # check list_info is valid 
         if list_info.input_git_tree_sha1 != input_git_tree_sha1
             @error "input_git_tree_sha1 was $(bytes2hex(list_info.input_git_tree_sha1)) now is $(bytes2hex(input_git_tree_sha1))"
-            exit(1)
+            return 1
         end
         if list_info.job_idx != job_idx
             @error "job_idx was $(list_info.job_idx) now is $job_idx"
-            exit(1)
+            return 1
         end
         # header isn't needed to continue the simulation, if the input hasn't changed, lets assume the header is still OK
 
@@ -357,8 +357,8 @@ Comonicon.@main function main(input_dir::AbstractString, output_dir::AbstractStr
             snapshot_i -= 1
         end
         if iszero(snapshot_i)
-            @error "None of the recorded snapshots are valid."
-            exit(1)
+            @error "none of the recorded snapshots are valid."
+            return 1
         end
         snapshot_info = list_info.snapshot_infos[snapshot_i]
         snapshot_file = joinpath(jobout,"snapshots","snapshot$(snapshot_info.step_number).h5")
@@ -387,20 +387,20 @@ Comonicon.@main function main(input_dir::AbstractString, output_dir::AbstractStr
         if status != :ok
             @error "failed to restartup, status: $status"
             if status === :timed_out
-                println_list(list_file, "Error restartup_timeout of $startup_timeout seconds reached")
+                println_list(list_file, "Error startup_timeout of $startup_timeout seconds reached")
             else
                 @error result
-                println_list(list_file, "Error restarting job")
+                println_list(list_file, "Error starting job")
             end
-            exit(1)
+            return 1
         end
-        @info "Done restarting simulation from step $step"
+        @info "done restarting simulation from step $step"
         worker_versioninfo = result[3]
 
         if result[1]
             @info "simulation completed"
             println_list(list_file, "Done")
-            exit()
+            return 0
         end
     end
     while step < max_steps
@@ -427,7 +427,7 @@ Comonicon.@main function main(input_dir::AbstractString, output_dir::AbstractStr
                 @error result
                 println_list(list_file, "Error running job")
             end
-            exit(1)
+            return 1
         end
         snapshot_filename = joinpath(jobout,"snapshots","snapshot$step.h5")
         snapshot_sha256 = open(snapshot_filename) do io
@@ -441,24 +441,24 @@ Comonicon.@main function main(input_dir::AbstractString, output_dir::AbstractStr
             $(result[3]), \
             $(bytes2hex(snapshot_sha256))"
         )
-        @info "Step $step of $(result[2]) done"
+        @info "step $step of $(result[2]) done"
 
         if result[1]
             @info "simulation completed"
             println_list(list_file, "Done")
-            exit()
+            return 0
         end
 
         if filesize(snapshot_filename) > max_snapshot_MB*2^20
             @error "snapshot too large, $(filesize(snapshot_filename)/2^20) MB"
             @error "max_snapshot_MB of $max_snapshot_MB MB reached"
             println_list(list_file, "Error max_snapshot_MB of $max_snapshot_MB MB reached")
-            exit(1)
+            return 1
         end
     end
     @error "max_steps of $max_steps steps reached"
     println_list(list_file, "Error max_steps of $max_steps steps reached")
-    exit(1)
+    return 1
 end
 
 
