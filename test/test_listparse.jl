@@ -10,7 +10,7 @@ using Random
     @test iszero(list_info.job_idx) # list is empty
 end
 @testset "list.txt startup error" begin
-    list_info = MEDYANSimRunner.parse_list_file("list-examples/list start error.txt")
+    list_info, _ = MEDYANSimRunner.parse_list_file("list-examples/list start error.txt")
     @test list_info.job_idx == 1
     @test list_info.input_git_tree_sha1 == hex2bytes("cc13b08d9531b1e1c650eb253d9f653ce1d3f885")
     @test list_info.header_sha256 == []
@@ -48,7 +48,7 @@ end
     @test list_info.final_message == ""
 end
 @testset "list.txt partial run not clean lines" begin
-    list_info = MEDYANSimRunner.parse_list_file("list-examples/list partial.txt")
+    list_info, _ = MEDYANSimRunner.parse_list_file("list-examples/list partial.txt")
     @test list_info.job_idx == 2
     @test list_info.input_git_tree_sha1 == hex2bytes("b0728b29b015ccbddf3d10737db5adaf8ade78ab")
     @test list_info.header_sha256 == hex2bytes("a36a3e400d8f3383247c9c58b380b74d9462d3c0484895eaf8a9f55db1aab9aa")
