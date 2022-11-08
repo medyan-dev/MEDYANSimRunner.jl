@@ -370,9 +370,9 @@ Comonicon.@main function main(input_dir::AbstractString, output_dir::AbstractStr
         # delete stuff from dir and remake it
         snapshot_dir = joinpath(jobout,"snapshots")
         #rewrite list file to remove broken lines.
-        list_file_str = join(list_file_good_lines[begin:end-(length(list_info.snapshot_infos)-snapshot_i)], "\n")
-        list_file = Base.Filesystem.open(joinpath(jobout,"list.txt"),  Base.Filesystem.JL_O_APPEND | Base.Filesystem.JL_O_TRUNC | Base.Filesystem.JL_O_WRONLY, log_perm)
-        println(list_file, list_file_str)
+        list_file_str = join(list_file_good_lines[begin:end-(length(list_info.snapshot_infos)-snapshot_i)], "\n")*"\n"
+        write(joinpath(jobout,"list.txt"), list_file_str)
+        list_file = Base.Filesystem.open(joinpath(jobout,"list.txt"), log_flags, log_perm)
 
         status, result = run_with_timeout(worker, startup_timeout, Expr(worker_startup_code.head, worker_startup_code.args..., (quote
             step::Int = $step
