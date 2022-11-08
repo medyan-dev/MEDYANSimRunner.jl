@@ -39,11 +39,8 @@ function done(step::Int, state)
 end
 
 function loop(step::Int, state)
-    a = sum(state)
+    a = sum(state) + rand(0:1)
     state[1] = state[2]
     state[2] = a
     state
 end
-
-
-
