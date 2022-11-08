@@ -1,4 +1,7 @@
 # MEDYANSimRunner.jl
+
+[![Build Status](https://github.com/medyan-dev/MEDYANSimRunner.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/medyan-dev/MEDYANSimRunner.jl/actions/workflows/CI.yml?query=branch%3Amain)
+
 Manage long running MEDYAN.jl simulations
 
 Simulations run using code stored in the `input` directory and write outputs to `output` directory.
