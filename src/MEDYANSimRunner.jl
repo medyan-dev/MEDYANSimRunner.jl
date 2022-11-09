@@ -8,7 +8,7 @@ using TOML
 using Dates
 using SHA
 using Distributed
-import Pkg
+import Tar
 import Random
 
 include("timeout.jl")
@@ -184,7 +184,7 @@ Comonicon.@cast function run(input_dir::AbstractString, output_dir::AbstractStri
         return 0
     end
 
-    input_git_tree_sha1 = Pkg.GitTools.tree_hash(input_dir)
+    input_git_tree_sha1 = hex2bytes(Tar.tree_hash(Tar.create(input_dir)))
     
     # start the worker
     # add processes on the same machine  with the specified input dir
