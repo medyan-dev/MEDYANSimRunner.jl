@@ -41,6 +41,7 @@ function str_2_rng(str::AbstractString)::Random.AbstractRNG
 end
 
 include("listparse.jl")
+include("outputdiff.jl")
 
 timestamp_logger(logger) = TransformerLogger(logger) do log
     merge(log, (; message = "$(Dates.format(now(), DATE_FORMAT)) $(log.message)"))
