@@ -197,9 +197,7 @@ Comonicon.@main function run(input_dir::AbstractString, output_dir::AbstractStri
 
     # Shared startup code
     worker_startup_code = Expr(:toplevel, (quote
-            filter!(LOAD_PATH) do path
-                path != "@v#.#"
-            end;
+            copy!(LOAD_PATH,["@","@stdlib",])
             import Pkg; Pkg.instantiate()
             import Dates
             import LoggingExtras
