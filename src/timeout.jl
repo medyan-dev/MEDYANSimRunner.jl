@@ -61,7 +61,15 @@ function run_with_timeout(worker::Int, timeout::Float64, expr::Expr; verbose=tru
         rc = ccall(:uv_kill, Cint, (Cint, Cint), ospid, SIGTERM)
         rc == 0 || throw(_UVError("kill", rc))
         close(channel)
-        rmprocs(worker)
+        try
+            rmprocs(worker)
+        catch e
+            if e isa Base.IOError
+                #Windows creates an IOError here for some reason
+            else
+                rethrow()
+            end
+        end
         return (:timed_out, nothing)
     end
 
