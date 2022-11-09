@@ -168,8 +168,8 @@ function print_output_diff(io::IO, jobout1::AbstractString, jobout2::AbstractStr
     print_list_file_diff(io, list1, list2)
 
     # snapshots sub dir
-    snapshots1 = readdir(joinpath(jobout1, "snapshots"))
-    snapshots2 = readdir(joinpath(jobout2, "snapshots"))
+    snapshots1 = sort(readdir(joinpath(jobout1, "snapshots"); sort=false); by=(x->(length(x),x)))
+    snapshots2 = sort(readdir(joinpath(jobout2, "snapshots"); sort=false); by=(x->(length(x),x)))
     for snapshotname in setdiff(snapshots1, snapshots2)
         println(io, joinpath(jobout2, "snapshots"), " missing: ", snapshotname)
     end
