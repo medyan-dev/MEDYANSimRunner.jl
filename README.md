@@ -83,7 +83,7 @@ Also return the expected value of step when done will first be true, used for di
 This function should not mutate `state`
 
 #### `loop(step::Int, state) -> state`
-Return the state that get passed to `save_snapshot`
+Return the state that gets passed to `save_snapshot`
 
 
 
