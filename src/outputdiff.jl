@@ -146,7 +146,25 @@ Ignores anything in the snapshot files that have an HDF5 name starting with a #
 - `jobout2`: The second output directory.
 
 """
-Comonicon.@cast function diff(io::IO, jobout1::AbstractString, jobout2::AbstractString)
+Comonicon.@cast function diff(jobout1::AbstractString, jobout2::AbstractString)
+    diff(stdout, jobout1, jobout2)
+end
+
+
+"""
+Prints the difference between two job output directories.
+
+Ignores time stamp differences and julia version differences in the list.txt file.
+
+Ignores anything in the snapshot files that have an HDF5 name starting with a #
+
+# Args
+
+- `jobout1`: The first output directory.
+- `jobout2`: The second output directory.
+
+"""
+function diff(io::IO, jobout1::AbstractString, jobout2::AbstractString)
     isdir(jobout1) || throw(ArgumentError("$jobout1 path not found"))
     isdir(jobout2) || throw(ArgumentError("$jobout2 path not found"))
 
