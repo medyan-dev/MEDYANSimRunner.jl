@@ -1,6 +1,8 @@
 # functions to show the difference between two job outputs
 
 import DeepDiffs
+using HDF5
+import JSON3
 
 """
     hdf5_print_diff(io, group1::Union{HDF5.File, HDF5.Group}, group2::Union{HDF5.File, HDF5.Group}, group1name="group1", group2name="group2", header="", ignorename=Returns(false))
@@ -73,27 +75,14 @@ function hdf5_print_attrs_diff(io, group1::Union{HDF5.File, HDF5.Group, HDF5.Dat
 end
 
 """
-hdf5_show_diff(;group1 group2)
-"""
-function hdf5_show_diff(ignorename=Returns(false);kwargs...)
-    length(kwargs) == 2 || length(kwargs) == 3 || error("must compare two groups")
-    group1name = string(keys(kwargs)[1])
-    group2name = string(keys(kwargs)[2])
-    maxnamewidth = max(textwidth(group1name),textwidth(group2name))
-    group1name = lpad(group1name, maxnamewidth)
-    group2name = lpad(group2name, maxnamewidth)
-    Docs.Text(io->hdf5_print_diff(io, kwargs[1], kwargs[2], group1name, group2name, "", ignorename))
-end
-
-"""
     print_json_diff(io::IO, json1::AbstractString, json2::AbstractString)
 
 Print the difference in two json strings.
 If there is no difference, nothing gets printed.
 """
 function print_json_diff(io::IO, json1::AbstractString, json2::AbstractString)
-    json1_pretty = sprint(JSON.pretty, JSON3.read(json1))
-    json2_pretty = sprint(JSON.pretty, JSON3.read(json2))
+    json1_pretty = sprint(JSON3.pretty, JSON3.read(json1))
+    json2_pretty = sprint(JSON3.pretty, JSON3.read(json2))
     if json1_pretty != json2_pretty
         println(io, DeepDiffs.deepdiff(json1_pretty, json2_pretty))
     end
@@ -126,8 +115,8 @@ function print_list_file_diff(io::IO, list1::AbstractString, list2::AbstractStri
             end
         end
         if length(l1.snapshot_infos) != length(l2.snapshot_infos)
-            println(io, list1, " has ", length(l1.snapshot_infos), "snapshots recorded")
-            println(io, list1, " has ", length(l2.snapshot_infos), "snapshots recorded")
+            println(io, list1, " has ", length(l1.snapshot_infos), " snapshots recorded")
+            println(io, list1, " has ", length(l2.snapshot_infos), " snapshots recorded")
         else
             for i in eachindex(l1.snapshot_infos)
                 s1 = l1.snapshot_infos[i]
@@ -149,16 +138,17 @@ Prints the difference between two job output directories.
 
 Ignores time stamp differences and julia version differences in the list.txt file.
 
+Ignores anything in the snapshot files that have an HDF5 name starting with a #
+
 # Args
 
-- `job_output_dir_1`: The first output directory.
-- `job_output_dir_2`: The second output directory.
+- `jobout1`: The first output directory.
+- `jobout2`: The second output directory.
 
 """
-function print_output_diff(io::IO, jobout1::AbstractString, jobout2::AbstractString)
-
-    isdir(jobout1) || throw(ArgumentError("$job_output_dir_1 path not found"))
-    isdir(jobout2) || throw(ArgumentError("$job_output_dir_2 path not found"))
+function diff(io::IO, jobout1::AbstractString, jobout2::AbstractString)
+    isdir(jobout1) || throw(ArgumentError("$jobout1 path not found"))
+    isdir(jobout2) || throw(ArgumentError("$jobout2 path not found"))
 
     # header.json
     header1 = joinpath(jobout1,"header.json")
@@ -178,7 +168,32 @@ function print_output_diff(io::IO, jobout1::AbstractString, jobout2::AbstractStr
     print_list_file_diff(io, list1, list2)
 
     # snapshots sub dir
-    snapshots1 = readdir(joinpath(jobout1, "snapshots"); join=true)
-    snapshots2 = readdir(joinpath(jobout2, "snapshots"); join=true)
-
+    snapshot1dir = joinpath(jobout1, "snapshots")
+    snapshot2dir = joinpath(jobout2, "snapshots")
+    snapshot1dir_exists = isdir(snapshot1dir) && !isempty(readdir(snapshot1dir; sort=false))
+    snapshot2dir_exists = isdir(snapshot2dir) && !isempty(readdir(snapshot2dir; sort=false))
+    if snapshot1dir_exists && snapshot2dir_exists
+        snapshots1 = sort(readdir(snapshot1dir; sort=false); by=(x->(length(x),x)))
+        snapshots2 = sort(readdir(snapshot2dir; sort=false); by=(x->(length(x),x)))
+        for snapshotname in setdiff(snapshots1, snapshots2)
+            println(io, joinpath(jobout2, "snapshots"), " missing: ", snapshotname)
+        end
+        for snapshotname in setdiff(snapshots2, snapshots1)
+            println(io, joinpath(jobout1, "snapshots"), " missing: ", snapshotname)
+        end
+        for snapshotname in (snapshots1 ∩ snapshots2)
+            full_name1 = joinpath(jobout1, "snapshots", snapshotname)
+            full_name2 = joinpath(jobout2, "snapshots", snapshotname)
+            HDF5.h5open(full_name1, "r") do file1
+                HDF5.h5open(full_name2, "r") do file2
+                    hdf5_print_diff(io, file1, file2, full_name1, full_name2, "", startswith("#"))
+                end
+            end
+        end
+    elseif snapshot1dir_exists && !snapshot2dir_exists
+        println(io, snapshot2dir, " dir missing or empty")
+    elseif !snapshot1dir_exists && snapshot2dir_exists
+        println(io, snapshot1dir, " dir missing or empty")
+    else
+    end
 end
