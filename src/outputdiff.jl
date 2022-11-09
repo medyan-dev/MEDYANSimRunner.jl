@@ -168,21 +168,32 @@ function diff(io::IO, jobout1::AbstractString, jobout2::AbstractString)
     print_list_file_diff(io, list1, list2)
 
     # snapshots sub dir
-    snapshots1 = sort(readdir(joinpath(jobout1, "snapshots"); sort=false); by=(x->(length(x),x)))
-    snapshots2 = sort(readdir(joinpath(jobout2, "snapshots"); sort=false); by=(x->(length(x),x)))
-    for snapshotname in setdiff(snapshots1, snapshots2)
-        println(io, joinpath(jobout2, "snapshots"), " missing: ", snapshotname)
-    end
-    for snapshotname in setdiff(snapshots2, snapshots1)
-        println(io, joinpath(jobout1, "snapshots"), " missing: ", snapshotname)
-    end
-    for snapshotname in (snapshots1 ∩ snapshots2)
-        full_name1 = joinpath(jobout1, "snapshots", snapshotname)
-        full_name2 = joinpath(jobout2, "snapshots", snapshotname)
-        HDF5.h5open(full_name1, "r") do file1
-            HDF5.h5open(full_name2, "r") do file2
-                hdf5_print_diff(io, file1, file2, full_name1, full_name2, "", startswith("#"))
+    snapshot1dir = joinpath(jobout1, "snapshots")
+    snapshot2dir = joinpath(jobout2, "snapshots")
+    snapshot1dir_exists = isdir(snapshot1dir) && !isempty(readdir(snapshot1dir; sort=false))
+    snapshot2dir_exists = isdir(snapshot2dir) && !isempty(readdir(snapshot2dir; sort=false))
+    if snapshot1dir_exists && snapshot2dir_exists
+        snapshots1 = sort(readdir(snapshot1dir; sort=false); by=(x->(length(x),x)))
+        snapshots2 = sort(readdir(snapshot2dir; sort=false); by=(x->(length(x),x)))
+        for snapshotname in setdiff(snapshots1, snapshots2)
+            println(io, joinpath(jobout2, "snapshots"), " missing: ", snapshotname)
+        end
+        for snapshotname in setdiff(snapshots2, snapshots1)
+            println(io, joinpath(jobout1, "snapshots"), " missing: ", snapshotname)
+        end
+        for snapshotname in (snapshots1 ∩ snapshots2)
+            full_name1 = joinpath(jobout1, "snapshots", snapshotname)
+            full_name2 = joinpath(jobout2, "snapshots", snapshotname)
+            HDF5.h5open(full_name1, "r") do file1
+                HDF5.h5open(full_name2, "r") do file2
+                    hdf5_print_diff(io, file1, file2, full_name1, full_name2, "", startswith("#"))
+                end
             end
         end
+    elseif snapshot1dir_exists && !snapshot2dir_exists
+        println(io, snapshot2dir, " dir missing or empty")
+    elseif !snapshot1dir_exists && snapshot2dir_exists
+        println(io, snapshot1dir, " dir missing or empty")
+    else
     end
 end

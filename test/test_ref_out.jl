@@ -7,20 +7,47 @@ using MEDYANSimRunner
 
 
 @testset "good example" begin
-    rm("examples/good/output"; force=true, recursive=true)
-    mkpath("examples/good/output")
-    MEDYANSimRunner.run("examples/good/input/", "examples/good/output/", 1)
-    out_diff = sprint(MEDYANSimRunner.diff, "examples/good/output-ref/out1", "examples/good/output/out1")
+    test_out = "examples/good/output"
+    rm(test_out; force=true, recursive=true)
+    mkpath(test_out)
+    MEDYANSimRunner.run("examples/good/input/", test_out, 1)
+    out_diff = sprint(MEDYANSimRunner.diff, "examples/good/output-ref/out1", joinpath(test_out,"out1"))
     if !isempty(out_diff)
         println(out_diff)
         @test false
     end
 end
 @testset "good partial example" begin
-    mkpath("examples/good partial/output")
-    cp("examples/good partial/output partial", "examples/good partial/output"; force=true)
-    MEDYANSimRunner.run("examples/good/input/", "examples/good partial/output/", 1)
-    out_diff = sprint(MEDYANSimRunner.diff, "examples/good/output-ref/out1", "examples/good partial/output/out1")
+    test_out = "examples/good partial/output"
+    mkpath(test_out)
+    cp("examples/good partial/output partial", test_out; force=true)
+    MEDYANSimRunner.run("examples/good/input/", test_out, 1)
+    out_diff = sprint(MEDYANSimRunner.diff, "examples/good/output-ref/out1", joinpath(test_out,"out1"))
+    if !isempty(out_diff)
+        println(out_diff)
+        @test false
+    end
+end
+@testset "missing manifest example" begin
+    test_out = "examples/missing manifest/output"
+    rm(test_out; force=true, recursive=true)
+    mkpath(test_out)
+    MEDYANSimRunner.run("examples/missing manifest/input/", test_out, 1)
+    # The output should be empty
+    out_diff = sprint(MEDYANSimRunner.diff, mktempdir(), joinpath(test_out,"out1"))
+    if !isempty(out_diff)
+        println(out_diff)
+        @test false
+    end
+end
+@testset "loading timeout example" begin
+    test_out = "examples/loading timeout/output"
+    rm(test_out; force=true, recursive=true)
+    mkpath(test_out)
+    MEDYANSimRunner.run("examples/loading timeout/input/", test_out, 1;
+        startup_timeout=2.0,
+    )
+    out_diff = sprint(MEDYANSimRunner.diff, "examples/loading timeout/output-ref/out1", joinpath(test_out,"out1"))
     if !isempty(out_diff)
         println(out_diff)
         @test false
