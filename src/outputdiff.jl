@@ -115,8 +115,8 @@ function print_list_file_diff(io::IO, list1::AbstractString, list2::AbstractStri
             end
         end
         if length(l1.snapshot_infos) != length(l2.snapshot_infos)
-            println(io, list1, " has ", length(l1.snapshot_infos), "snapshots recorded")
-            println(io, list1, " has ", length(l2.snapshot_infos), "snapshots recorded")
+            println(io, list1, " has ", length(l1.snapshot_infos), " snapshots recorded")
+            println(io, list1, " has ", length(l2.snapshot_infos), " snapshots recorded")
         else
             for i in eachindex(l1.snapshot_infos)
                 s1 = l1.snapshot_infos[i]
