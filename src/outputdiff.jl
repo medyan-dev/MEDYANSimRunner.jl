@@ -146,7 +146,7 @@ Ignores anything in the snapshot files that have an HDF5 name starting with a #
 - `jobout2`: The second output directory.
 
 """
-function diff(io::IO, jobout1::AbstractString, jobout2::AbstractString)
+Comonicon.@cast function diff(io::IO, jobout1::AbstractString, jobout2::AbstractString)
     isdir(jobout1) || throw(ArgumentError("$jobout1 path not found"))
     isdir(jobout2) || throw(ArgumentError("$jobout2 path not found"))
 

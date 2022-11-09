@@ -115,7 +115,7 @@ Start or continue a simulation job.
 - `--max_snapshot_MB`: max amount of disk space one snapshot can take up.
 
 """
-Comonicon.@main function run(input_dir::AbstractString, output_dir::AbstractString, job_idx::Int;
+Comonicon.@cast function run(input_dir::AbstractString, output_dir::AbstractString, job_idx::Int;
         step_timeout::Float64=100.0,
         max_steps::Int=1_000_000,
         startup_timeout::Float64=1000.0,
@@ -157,7 +157,9 @@ Comonicon.@main function run(input_dir::AbstractString, output_dir::AbstractStri
             exit(1)
         end
     end
-    sleep(1.1)
+    detect_mult_runners_startup = @async sleep(1.1)
+    # wait on detect_mult_runners_startup before writing to list.txt
+    
 
     input_dir_valid = is_input_dir_valid(input_dir)
     if !input_dir_valid
@@ -193,7 +195,7 @@ Comonicon.@main function run(input_dir::AbstractString, output_dir::AbstractStri
     )[1]
 
     worker_nthreads = remotecall_fetch(Threads.nthreads, worker)
-    # worker_versioninfo = replace(sprint(InteractiveUtils.versioninfo), "\n"=>" ", ","=>" ")
+    wait(detect_mult_runners_startup)
 
     # Shared startup code
     worker_startup_code = Expr(:toplevel, (quote
@@ -475,21 +477,24 @@ Comonicon.@main function run(input_dir::AbstractString, output_dir::AbstractStri
 end
 
 
+Comonicon.@main
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# @precompile_setup begin
+#     # Putting some things in `setup` can reduce the size of the
+#     # precompile file and potentially make loading faster.
+#     test_out = mktempdir()
+#     test_out2 = mktempdir()
+#     input_dir = joinpath(dirname(@__DIR__),"test","examples","good","input")
+#     @precompile_all_calls begin
+#         # all calls in this block will be precompiled, regardless of whether
+#         # they belong to your package or not (on Julia 1.8 and higher)
+        
+#         MEDYANSimRunner.run(input_dir, test_out, 1)
+#         MEDYANSimRunner.run(input_dir, test_out, 1)
+#         # cp("../test/examples/good partial/output partial", test_out2; force=true)
+#         # MEDYANSimRunner.run("../test/examples/good/input/", test_out2, 1)
+#     end
+# end
 
 end # module MEDYANSimRunner
