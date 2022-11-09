@@ -6,6 +6,12 @@ using Random
 using SHA
 using OrderedCollections: OrderedDict
 
+const a = Ref(0)
+while true
+    a[] += 1
+end
+
+
 
 """
 Return the header dictionary to be written as the `header.json` file in output.
