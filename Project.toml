@@ -20,4 +20,5 @@ TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 
 [compat]
 Comonicon = "1"
+HDF5 = "0.16"
 LoggingExtras = "0.4"
