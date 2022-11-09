@@ -35,7 +35,7 @@ function load_snapshot(step::Int, hdf5_group, state)
 end
 
 function done(step::Int, state)
-    step > 100, 101
+    step > 10, 11
 end
 
 function loop(step::Int, state)

@@ -148,7 +148,7 @@ Comonicon.@main function run(input_dir::AbstractString, output_dir::AbstractStri
     # any process that detects this should log an error and exit.
     detect_mult_runners_f = Base.Filesystem.open(joinpath(jobout, "detect-mult-process"), log_flags, log_perm)
     detect_mult_runners_size = Ref(filesize(detect_mult_runners_f))
-    Timer(0.0; interval=0.5) do t
+    detect_mult_runners_t = Timer(0.0; interval=0.5) do t
         write(detect_mult_runners_f, 0x41)
         flush(detect_mult_runners_f)
         detect_mult_runners_size[] += 1
@@ -161,6 +161,7 @@ Comonicon.@main function run(input_dir::AbstractString, output_dir::AbstractStri
 
     input_dir_valid = is_input_dir_valid(input_dir)
     if !input_dir_valid
+        close(detect_mult_runners_t)
         return 1
     end
     
@@ -168,6 +169,7 @@ Comonicon.@main function run(input_dir::AbstractString, output_dir::AbstractStri
         parse_list_file(joinpath(jobout,"list.txt"))
     catch ex
         @error "invalid list.txt syntax." exception=ex
+        close(detect_mult_runners_t)
         rethrow()
         return 1
     end
@@ -176,6 +178,7 @@ Comonicon.@main function run(input_dir::AbstractString, output_dir::AbstractStri
     # note: this doesn't validate the snapshot files, or input files.
     if !isempty(list_info.final_message)
         @info "simulation already complete, exiting"
+        close(detect_mult_runners_t)
         return 0
     end
 
@@ -292,6 +295,7 @@ Comonicon.@main function run(input_dir::AbstractString, output_dir::AbstractStri
                 @error result
                 println_list(list_file, "Error starting job")
             end
+            close(detect_mult_runners_t)
             return 1
         end
         worker_versioninfo = result[5]
@@ -324,6 +328,7 @@ Comonicon.@main function run(input_dir::AbstractString, output_dir::AbstractStri
         if result[1]
             @info "simulation completed"
             println_list(list_file, "Done")
+            close(detect_mult_runners_t)
             return 0
         end
         step = 1
@@ -334,10 +339,12 @@ Comonicon.@main function run(input_dir::AbstractString, output_dir::AbstractStri
         # check list_info is valid 
         if list_info.input_git_tree_sha1 != input_git_tree_sha1
             @error "input_git_tree_sha1 was $(bytes2hex(list_info.input_git_tree_sha1)) now is $(bytes2hex(input_git_tree_sha1))"
+            close(detect_mult_runners_t)
             return 1
         end
         if list_info.job_idx != job_idx
             @error "job_idx was $(list_info.job_idx) now is $job_idx"
+            close(detect_mult_runners_t)
             return 1
         end
         # header isn't needed to continue the simulation, if the input hasn't changed, lets assume the header is still OK
@@ -359,6 +366,7 @@ Comonicon.@main function run(input_dir::AbstractString, output_dir::AbstractStri
         end
         if iszero(snapshot_i)
             @error "none of the recorded snapshots are valid."
+            close(detect_mult_runners_t)
             return 1
         end
         snapshot_info = list_info.snapshot_infos[snapshot_i]
@@ -393,6 +401,7 @@ Comonicon.@main function run(input_dir::AbstractString, output_dir::AbstractStri
                 @error result
                 println_list(list_file, "Error starting job")
             end
+            close(detect_mult_runners_t)
             return 1
         end
         @info "done restarting simulation from step $step"
@@ -401,6 +410,7 @@ Comonicon.@main function run(input_dir::AbstractString, output_dir::AbstractStri
         if result[1]
             @info "simulation completed"
             println_list(list_file, "Done")
+            close(detect_mult_runners_t)
             return 0
         end
     end
@@ -428,6 +438,7 @@ Comonicon.@main function run(input_dir::AbstractString, output_dir::AbstractStri
                 @error result
                 println_list(list_file, "Error running job")
             end
+            close(detect_mult_runners_t)
             return 1
         end
         snapshot_filename = joinpath(jobout,"snapshots","snapshot$step.h5")
@@ -447,6 +458,7 @@ Comonicon.@main function run(input_dir::AbstractString, output_dir::AbstractStri
         if result[1]
             @info "simulation completed"
             println_list(list_file, "Done")
+            close(detect_mult_runners_t)
             return 0
         end
 
@@ -454,11 +466,13 @@ Comonicon.@main function run(input_dir::AbstractString, output_dir::AbstractStri
             @error "snapshot too large, $(filesize(snapshot_filename)/2^20) MB"
             @error "max_snapshot_MB of $max_snapshot_MB MB reached"
             println_list(list_file, "Error max_snapshot_MB of $max_snapshot_MB MB reached")
+            close(detect_mult_runners_t)
             return 1
         end
     end
     @error "max_steps of $max_steps steps reached"
     println_list(list_file, "Error max_steps of $max_steps steps reached")
+    close(detect_mult_runners_t)
     return 1
 end
 

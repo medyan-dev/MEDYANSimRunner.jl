@@ -146,9 +146,9 @@ Ignores anything in the snapshot files that have an HDF5 name starting with a #
 - `jobout2`: The second output directory.
 
 """
-function print_output_diff(io::IO, jobout1::AbstractString, jobout2::AbstractString)
-    isdir(jobout1) || throw(ArgumentError("$job_output_dir_1 path not found"))
-    isdir(jobout2) || throw(ArgumentError("$job_output_dir_2 path not found"))
+function diff(io::IO, jobout1::AbstractString, jobout2::AbstractString)
+    isdir(jobout1) || throw(ArgumentError("$jobout1 path not found"))
+    isdir(jobout2) || throw(ArgumentError("$jobout2 path not found"))
 
     # header.json
     header1 = joinpath(jobout1,"header.json")
