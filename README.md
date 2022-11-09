@@ -2,16 +2,36 @@
 
 [![Build Status](https://github.com/medyan-dev/MEDYANSimRunner.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/medyan-dev/MEDYANSimRunner.jl/actions/workflows/CI.yml?query=branch%3Amain)
 
-Manage long running MEDYAN.jl simulations
+Manage long running restartable MEDYAN.jl simulations.
 
-Simulations run using code stored in the `input` directory and write outputs to `output` directory.
+Simulations run using code stored in an `input` directory and write outputs to an `output` directory.
+
+## Installation
+First install and run Julia https://julialang.org/downloads/
+
+Then in Julia install this repo as a regular Julia package.
+```julia
+import Pkg
+
+Pkg.add("https://github.com/medyan-dev/MEDYANSimRunner.jl")
+```
+
+This will add a `medyansimrunner` to `~/.julia/bin`, so add `~/.julia/bin` to your PATH.
+
+Run:
+```sh
+medyansimrunner -h
+```
+To see the help.
 
 ## Example
 Run the following in the root of this project.
 ```sh
 mkdir test/examples/good/output
-julia --project -e 'import MEDYANSimRunner; MEDYANSimRunner.command_main(["test/examples/good/input","test/examples/good/output","1"])'
+medyansimrunner run test/examples/good/input test/examples/good/output 1
 ```
+This will run the example simulation in `test/examples/good/input` with job index 1 and store the output in `test/examples/good/output/out1`
+
 ## input kwargs
 
 - `step_timeout`: the maximum amount of time in seconds each step is allowed to take before the job is killed.
@@ -69,7 +89,8 @@ Return the state that get passed to `save_snapshot`
 
 ### `Manifest.toml` and `Project.toml`
 
-These contain the julia environment used when running the simulation. These must contain HDF5 and JSON3, because these are required for saving data.
+These contain the julia environment used when running the simulation. 
+These must contain HDF5, JSON3, and LoggingExtras, because these are required for saving data.
 
 ### Main loop pseudo code
 
@@ -186,4 +207,4 @@ See the log files for more details and error messages.
 
 ### `snapshots` subdirectory
 Contains `snapshot$i.h5` files where `i` is the step of the simulation.
-The states returned by `setup` are stored in `snapshot0.h5`
+The state returned by `setup` is stored in `snapshot0.h5`
