@@ -108,7 +108,7 @@ function print_list_file_diff(io::IO, list1::AbstractString, list2::AbstractStri
         end
     else
         # both exist
-        for fname in (:job_idx, :input_git_tree_sha1, :final_message)
+        for fname in (:job_idx, :input_tree_hash, :final_message)
             if getproperty(l1, fname) != getproperty(l2, fname)
                 println(io, list1," ",fname,": ", getproperty(l1, fname))
                 println(io, list2," ",fname,": ", getproperty(l2, fname))

@@ -150,11 +150,11 @@ The last element in each line is the sha256 of the line, not including the last 
 
 The first line is.
 ```
-version = 1, job_idx = 1, input_git_tree_sha1 = 5a936e..., 54bf8d69288...
+version = 1, job_idx = 1, input_tree_hash = 5a936e..., 54bf8d69288...
 ```
 - `version`: version of the info.txt format.
 - `job_idx`: index of the job. 
-- `input_git_tree_sha1`: hash of input directory
+- `input_tree_hash`: hash of input directory
 
 The second line is:
 ```

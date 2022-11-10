@@ -8,10 +8,10 @@ using TOML
 using Dates
 using SHA
 using Distributed
-import Tar
 import Random
 
 include("timeout.jl")
+include("treehash.jl")
 
 const DATE_FORMAT = dateformat"yyyy-mm-dd HH:MM:SS"
 
@@ -184,7 +184,7 @@ Comonicon.@cast function run(input_dir::AbstractString, output_dir::AbstractStri
         return 0
     end
 
-    input_git_tree_sha1 = hex2bytes(Tar.tree_hash(Tar.create(input_dir)))
+    input_tree_hash = my_tree_hash(input_dir)
     
     # start the worker
     # add processes on the same machine  with the specified input dir
@@ -262,7 +262,7 @@ Comonicon.@cast function run(input_dir::AbstractString, output_dir::AbstractStri
         list_file = Base.Filesystem.open(joinpath(jobout,"list.txt"), log_flags, log_perm)
         mkdir(snapshot_dir)
         println_list(list_file,
-            "version = 1, job_idx = $job_idx, input_git_tree_sha1 = $(bytes2hex(input_git_tree_sha1))"
+            "version = 1, job_idx = $job_idx, input_tree_hash = $(bytes2hex(input_tree_hash))"
         )
 
         @info "starting up simulation"
@@ -337,8 +337,8 @@ Comonicon.@cast function run(input_dir::AbstractString, output_dir::AbstractStri
         # Continue from an old job
         @info "continuing job"
         # check list_info is valid 
-        if list_info.input_git_tree_sha1 != input_git_tree_sha1
-            @error "input_git_tree_sha1 was $(bytes2hex(list_info.input_git_tree_sha1)) now is $(bytes2hex(input_git_tree_sha1))"
+        if list_info.input_tree_hash != input_tree_hash
+            @error "input_tree_hash was $(bytes2hex(list_info.input_tree_hash)) now is $(bytes2hex(input_tree_hash))"
             close(detect_mult_runners_t)
             return 1
         end

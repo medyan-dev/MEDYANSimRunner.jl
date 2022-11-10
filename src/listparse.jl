@@ -28,7 +28,7 @@ Represents a parsed list.txt file.
 """
 Base.@kwdef struct ListFileV1
     job_idx::Int = 0
-    input_git_tree_sha1::Vector{UInt8} = []
+    input_tree_hash::Vector{UInt8} = []
     header_sha256::Vector{UInt8} = []
     snapshot_infos::Vector{SnapshotInfoV1} = []
     final_message::String = ""
@@ -75,10 +75,10 @@ function parse_list_file(listpath::AbstractString)
         error("expected \"job_idx\" got $(firstlineparts[2][1])")
     end
     job_idx = parse(Int, firstlineparts[2][2])
-    if firstlineparts[3][1] != "input_git_tree_sha1"
-        error("expected \"input_git_tree_sha1\" got $(firstlineparts[3][1])")
+    if firstlineparts[3][1] != "input_tree_hash"
+        error("expected \"input_tree_hash\" got $(firstlineparts[3][1])")
     end
-    input_git_tree_sha1 = hex2bytes(firstlineparts[3][2])
+    input_tree_hash = hex2bytes(firstlineparts[3][2])
 
     # check if last line is error or done
     maybemessage = lines[end][1]
@@ -92,7 +92,7 @@ function parse_list_file(listpath::AbstractString)
     if length(lines) == 2 && !isempty(final_message)
         return ListFileV1(;
             job_idx,
-            input_git_tree_sha1,
+            input_tree_hash,
             final_message,
         ), good_rawlines
     end
@@ -119,7 +119,7 @@ function parse_list_file(listpath::AbstractString)
     end
     return ListFileV1(;
         job_idx,
-        input_git_tree_sha1,
+        input_tree_hash,
         header_sha256,
         snapshot_infos,
         final_message,
