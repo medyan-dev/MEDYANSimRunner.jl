@@ -81,8 +81,8 @@ Print the difference in two json strings.
 If there is no difference, nothing gets printed.
 """
 function print_json_diff(io::IO, json1::AbstractString, json2::AbstractString)
-    json1_pretty = sprint(JSON3.pretty, JSON3.read(json1))
-    json2_pretty = sprint(JSON3.pretty, JSON3.read(json2))
+    json1_pretty = sprint(io -> JSON3.pretty(io, JSON3.read(json1; allow_inf=true); allow_inf=true))
+    json2_pretty = sprint(io -> JSON3.pretty(io, JSON3.read(json2; allow_inf=true); allow_inf=true))
     if json1_pretty != json2_pretty
         println(io, DeepDiffs.deepdiff(json1_pretty, json2_pretty))
     end

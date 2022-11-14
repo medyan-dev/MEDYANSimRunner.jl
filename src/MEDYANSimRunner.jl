@@ -269,7 +269,7 @@ Comonicon.@cast function run(input_dir::AbstractString, output_dir::AbstractStri
         status, result = run_with_timeout(worker, startup_timeout, Expr(worker_startup_code.head, worker_startup_code.args..., (quote
             step::Int = $step    
             open(joinpath($jobout,"header.json"), "w") do io
-                JSON3.pretty(io, job_header)
+                JSON3.pretty(io, job_header; allow_inf = true)
             end
             state = HDF5.h5open(joinpath($jobout,"snapshots","snapshot$step.h5"), "w") do job_file
                 UserCode.save_snapshot(step, job_file, state)
