@@ -66,12 +66,12 @@ Also set the default random number generator seed.
 
 `job_idx::Int`: The job index starting with job 1. This is used for multi job simulations.
 
-#### `save_snapshot(step::Int, hdf5_group::Union{HDF5.Group, HDF5.File}, state)`
-Save the state in the empty `hdf5_group`.
+#### `save_snapshot(step::Int, state)::StorageTrees.ZGroup`
+Return the state of the system as a `StorageTrees.ZGroup`
 This function should not mutate `state`
 
-#### `load_snapshot(step::Int, hdf5_group::Union{HDF5.Group, HDF5.File}, state) -> state`
-Load the state saved by `save_snapshot` `hdf5_group`
+#### `load_snapshot(step::Int, group::StorageTrees.ZGroup, state) -> state`
+Load the state saved by `save_snapshot` `group`
 This function can mutate `state`.
 `state` may be the state returned from `setup` or the `state` returned by `loop`.
 
@@ -90,7 +90,7 @@ Return the state that gets passed to `save_snapshot`
 ### `Manifest.toml` and `Project.toml`
 
 These contain the julia environment used when running the simulation. 
-These must contain HDF5, JSON3, and LoggingExtras, because these are required for saving data.
+These must contain StorageTrees, JSON3, and LoggingExtras, because these are required for saving data.
 
 ### Main loop pseudo code
 
@@ -101,10 +101,9 @@ create output directory if it doesn't exist
 job_header, state =  setup(job_idx)
 save job_header
 step = 0
-job_file = create snapshot file(step)
-save_snapshot(step, job_file, state)
-state = load_snapshot(step, job_file, state)
-close(job_file)
+group = 
+StorageTrees.save_dir(snapshot_dir, save_snapshot(step, state))
+state = load_snapshot(step, StorageTrees.load_dir(snapshot_dir), state)
 while true
     state = loop(step, state)
     step = step + 1
