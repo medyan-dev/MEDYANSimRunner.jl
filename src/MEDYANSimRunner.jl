@@ -18,6 +18,13 @@ const DATE_FORMAT = dateformat"yyyy-mm-dd HH:MM:SS"
 # amount to pad step count by with lpad
 const STEP_PAD = 7
 
+
+    # Don't use regular Base.open with append=true to make log files
+    # because it overwrites appends from other processes.
+    # Maybe add Base.Filesystem.JL_O_SYNC?
+const LOG_FLAGS = Base.Filesystem.JL_O_APPEND | Base.Filesystem.JL_O_CREAT | Base.Filesystem.JL_O_WRONLY
+const LOG_PERMISSIONS = Base.Filesystem.S_IROTH | Base.Filesystem.S_IRGRP | Base.Filesystem.S_IWGRP | Base.Filesystem.S_IRUSR | Base.Filesystem.S_IWUSR
+
 """
 Return a string describing the state of the rng without any newlines or commas
 """
@@ -39,6 +46,70 @@ function str_2_rng(str::AbstractString)::Random.AbstractRNG
     state = parse.(UInt64, parts[2:end])
     Random.Xoshiro(state...)
 end
+
+"""
+Shared startup code
+"""
+const WORKER_STARTUP_CODE = Expr(:toplevel, (quote
+    copy!(LOAD_PATH,["@","@stdlib",])
+    import Pkg; Pkg.instantiate()
+    import Dates
+    import LoggingExtras
+    import Logging
+    import JSON3
+    import StorageTrees
+    import Random
+    worker_timestamp_logger(logger) = LoggingExtras.TransformerLogger(logger) do log
+        merge(log, (; message = "$(Dates.format(Dates.now(), $DATE_FORMAT)) $(log.message)"))
+    end
+    jobout = ENV["MEDYAN_JOBOUT"]
+    LoggingExtras.TeeLogger(
+        # Logging.global_logger(),
+        worker_timestamp_logger(Logging.ConsoleLogger(Base.Filesystem.open(joinpath(jobout,"info.log"),  $LOG_FLAGS, $LOG_PERMISSIONS), Logging.Info)),
+        worker_timestamp_logger(Logging.ConsoleLogger(Base.Filesystem.open(joinpath(jobout,"warn.log"),  $LOG_FLAGS, $LOG_PERMISSIONS), Logging.Warn)),
+        worker_timestamp_logger(Logging.ConsoleLogger(Base.Filesystem.open(joinpath(jobout,"error.log"), $LOG_FLAGS, $LOG_PERMISSIONS), Logging.Error)),
+    ) |> Logging.global_logger
+
+    const worker_version_info::String = """
+    Julia Version: $VERSION \
+    OS: $(Sys.iswindows() ? "Windows" : Sys.isapple() ? "macOS" : Sys.KERNEL) ($(Sys.MACHINE)) \
+    CPU: $(Sys.cpu_info()[1].model) \
+    WORD_SIZE: $(Sys.WORD_SIZE) \
+    LIBM: $(Base.libm_name) \
+    LLVM: libLLVM-$(Base.libllvm_version) ($(Sys.JIT) $(Sys.CPU_NAME)) \
+    Threads: $(Threads.nthreads()) on $(Sys.CPU_THREADS) virtual cores \
+    """
+
+    """
+    Return a string describing the state of the rng without any newlines or commas
+    """
+    function worker_rng_2_str(rng = Random.default_rng())::String
+        myrng = copy(rng)
+        if typeof(myrng)==Random.Xoshiro
+            "Xoshiro: $(repr(myrng.s0)) $(repr(myrng.s1)) $(repr(myrng.s2)) $(repr(myrng.s3))"
+        else
+            error("rng of type $(typeof(myrng)) not supported yet")
+        end
+    end
+
+    const worker_rng_str = Ref("")
+    const worker_rng_copy = copy(Random.default_rng())
+    module UserCode
+        include("main.jl")
+    end
+
+    function save_load_snapshot_dir(step, jobout, worker_rng_str, state)
+        snapshot_dir = mkpath(joinpath(jobout,"snapshots","snapshot$step.zarr"))
+        rm(snapshot_dir; force=true, recursive=true)
+        StorageTrees.save_dir(snapshot_dir, UserCode.save_snapshot(step, state))
+        worker_rng_str[] = worker_rng_2_str()
+        load_snapshot(step, StorageTrees.load_dir(snapshot_dir), state)
+    end
+
+    job_header, state =  UserCode.setup($job_idx)
+    step::Int = 0
+    nothing
+end).args...)
 
 include("listparse.jl")
 include("outputdiff.jl")
@@ -126,27 +197,19 @@ Comonicon.@cast function run(input_dir::AbstractString, output_dir::AbstractStri
     # first make the output folder
     jobout = abspath(mkpath(joinpath(output_dir,"out$job_idx")))
 
-    # Don't use regular Base.open with append=true to make log files
-    # because it overwrites appends from other processes.
-    # Maybe add Base.Filesystem.JL_O_SYNC?
-    log_flags = Base.Filesystem.JL_O_APPEND | Base.Filesystem.JL_O_CREAT | Base.Filesystem.JL_O_WRONLY
-    log_perm = Base.Filesystem.S_IROTH | Base.Filesystem.S_IRGRP | Base.Filesystem.S_IWGRP | Base.Filesystem.S_IRUSR | Base.Filesystem.S_IWUSR
-
     # next set up logging
-    info_logger = ConsoleLogger(Base.Filesystem.open(joinpath(jobout,"info.log"), log_flags, log_perm), Logging.Info)
-    warn_logger = ConsoleLogger(Base.Filesystem.open(joinpath(jobout,"warn.log"), log_flags, log_perm), Logging.Warn)
-    error_logger = ConsoleLogger(Base.Filesystem.open(joinpath(jobout,"error.log"), log_flags, log_perm), Logging.Error)
+    info_logger = ConsoleLogger(Base.Filesystem.open(joinpath(jobout,"info.log"), LOG_FLAGS, LOG_PERMISSIONS), Logging.Info)
+    warn_logger = ConsoleLogger(Base.Filesystem.open(joinpath(jobout,"warn.log"), LOG_FLAGS, LOG_PERMISSIONS), Logging.Warn)
+    error_logger = ConsoleLogger(Base.Filesystem.open(joinpath(jobout,"error.log"), LOG_FLAGS, LOG_PERMISSIONS), Logging.Error)
     logger = TeeLogger(
         global_logger(),
         timestamp_logger(info_logger),
         timestamp_logger(warn_logger),
         timestamp_logger(error_logger),
     )
-    global_logger(logger)
-
-    # now start writing to a file every second to detect multiple processes trying to run the same job
+        # now start writing to a file every second to detect multiple processes trying to run the same job
     # any process that detects this should log an error and exit.
-    detect_mult_runners_f = Base.Filesystem.open(joinpath(jobout, "detect-mult-process"), log_flags, log_perm)
+    detect_mult_runners_f = Base.Filesystem.open(joinpath(jobout, "detect-mult-process"), LOG_FLAGS, LOG_PERMISSIONS)
     detect_mult_runners_size = Ref(filesize(detect_mult_runners_f))
     detect_mult_runners_t = Timer(0.0; interval=0.5) do t
         write(detect_mult_runners_f, 0x41)
@@ -157,13 +220,16 @@ Comonicon.@cast function run(input_dir::AbstractString, output_dir::AbstractStri
             exit(1)
         end
     end
+
+    return_code = with_logger(logger) do
+
+
     detect_mult_runners_startup = @async sleep(1.1)
     # wait on detect_mult_runners_startup before writing to list.txt
     
 
     input_dir_valid = is_input_dir_valid(input_dir)
     if !input_dir_valid
-        close(detect_mult_runners_t)
         return 1
     end
     
@@ -171,8 +237,6 @@ Comonicon.@cast function run(input_dir::AbstractString, output_dir::AbstractStri
         parse_list_file(joinpath(jobout,"list.txt"))
     catch ex
         @error "invalid list.txt syntax." exception=ex
-        close(detect_mult_runners_t)
-        rethrow()
         return 1
     end
 
@@ -180,7 +244,6 @@ Comonicon.@cast function run(input_dir::AbstractString, output_dir::AbstractStri
     # note: this doesn't validate the snapshot files, or input files.
     if !isempty(list_info.final_message)
         @info "simulation already complete, exiting"
-        close(detect_mult_runners_t)
         return 0
     end
 
@@ -192,61 +255,17 @@ Comonicon.@cast function run(input_dir::AbstractString, output_dir::AbstractStri
         topology=:master_worker,
         exeflags="--project",
         dir=input_dir,
+        env = [
+            "JULIA_WORKER_TIMEOUT"=>"60.0",
+            "MEDYAN_JOBOUT"=>jobout,
+
+        ],
     )[1]
 
     worker_nthreads = remotecall_fetch(Threads.nthreads, worker)
     wait(detect_mult_runners_startup)
 
-    # Shared startup code
-    worker_startup_code = Expr(:toplevel, (quote
-            copy!(LOAD_PATH,["@","@stdlib",])
-            import Pkg; Pkg.instantiate()
-            import Dates
-            import LoggingExtras
-            import Logging
-            import JSON3
-            import HDF5
-            import Random
-            worker_timestamp_logger(logger) = LoggingExtras.TransformerLogger(logger) do log
-                merge(log, (; message = "$(Dates.format(Dates.now(), $DATE_FORMAT)) $(log.message)"))
-            end            
-            LoggingExtras.TeeLogger(
-                # Logging.global_logger(),
-                worker_timestamp_logger(Logging.ConsoleLogger(Base.Filesystem.open(joinpath($jobout,"info.log"),  $log_flags, $log_perm), Logging.Info)),
-                worker_timestamp_logger(Logging.ConsoleLogger(Base.Filesystem.open(joinpath($jobout,"warn.log"),  $log_flags, $log_perm), Logging.Warn)),
-                worker_timestamp_logger(Logging.ConsoleLogger(Base.Filesystem.open(joinpath($jobout,"error.log"), $log_flags, $log_perm), Logging.Error)),
-            ) |> Logging.global_logger
-            
-            const worker_version_info::String = """
-            Julia Version: $VERSION \
-            OS: $(Sys.iswindows() ? "Windows" : Sys.isapple() ? "macOS" : Sys.KERNEL) ($(Sys.MACHINE)) \
-            CPU: $(Sys.cpu_info()[1].model) \
-            WORD_SIZE: $(Sys.WORD_SIZE) \
-            LIBM: $(Base.libm_name) \
-            LLVM: libLLVM-$(Base.libllvm_version) ($(Sys.JIT) $(Sys.CPU_NAME)) \
-            Threads: $(Threads.nthreads()) on $(Sys.CPU_THREADS) virtual cores \
-            """
-
-            """
-            Return a string describing the state of the rng without any newlines or commas
-            """
-            function worker_rng_2_str(rng = Random.default_rng())::String
-                myrng = copy(rng)
-                if typeof(myrng)==Random.Xoshiro
-                    "Xoshiro: $(repr(myrng.s0)) $(repr(myrng.s1)) $(repr(myrng.s2)) $(repr(myrng.s3))"
-                else
-                    error("rng of type $(typeof(myrng)) not supported yet")
-                end
-            end
-
-            const worker_rng_str0 = Ref("")
-            const worker_rng_str1 = Ref("")
-            const worker_rng_copy = copy(Random.default_rng())
-            module UserCode
-                include("main.jl")
-            end
-            job_header, state =  UserCode.setup($job_idx)
-        end).args...)
+    
 
     # if list is empty start new job, otherwise continue the job
     local step::Int
@@ -255,37 +274,24 @@ Comonicon.@cast function run(input_dir::AbstractString, output_dir::AbstractStri
         @info "starting new job"
         step = 0
         # delete stuff from dir and remake it
-        snapshot_dir = joinpath(jobout,"snapshots")
-        rm(snapshot_dir; force=true, recursive=true)
+        snapshots_dir = joinpath(jobout,"snapshots")
+        rm(snapshots_dir; force=true, recursive=true)
         rm(joinpath(jobout,"list.txt"); force=true)
         rm(joinpath(jobout,"header.json"); force=true)
-        list_file = Base.Filesystem.open(joinpath(jobout,"list.txt"), log_flags, log_perm)
-        mkdir(snapshot_dir)
+        list_file = Base.Filesystem.open(joinpath(jobout,"list.txt"), LOG_FLAGS, LOG_PERMISSIONS)
+        mkdir(snapshots_dir)
         println_list(list_file,
             "version = 1, job_idx = $job_idx, input_tree_hash = $(bytes2hex(input_tree_hash))"
         )
 
         @info "starting up simulation"
-        status, result = run_with_timeout(worker, startup_timeout, Expr(worker_startup_code.head, worker_startup_code.args..., (quote
-            step::Int = $step    
-            open(joinpath($jobout,"header.json"), "w") do io
+        status, result = run_with_timeout(worker, startup_timeout, Expr(WORKER_STARTUP_CODE.head, WORKER_STARTUP_CODE.args..., (quote
+            open(joinpath(jobout,"header.json"), "w") do io
                 JSON3.pretty(io, job_header; allow_inf = true)
             end
-            state = HDF5.h5open(joinpath($jobout,"snapshots","snapshot$step.h5"), "w") do job_file
-                UserCode.save_snapshot(step, job_file, state)
-                worker_rng_str0[] = worker_rng_2_str()
-                UserCode.load_snapshot(step, job_file, state)
-            end
-            state = UserCode.loop(step, state)
-            step += 1
-            state = HDF5.h5open(joinpath($jobout,"snapshots","snapshot$step.h5"), "w") do job_file
-                UserCode.save_snapshot(step, job_file, state)
-                worker_rng_str1[] = worker_rng_2_str()
-                UserCode.load_snapshot(step, job_file, state)
-            end
-            isdone::Bool, expected_final_step::Int64 = UserCode.done(step, state)
+            state = save_load_snapshot_dir(step, jobout, worker_rng_str, state)
             copy!(worker_rng_copy, Random.default_rng())
-            isdone, expected_final_step, worker_rng_str0[], worker_rng_str1[], worker_version_info
+            worker_rng_str[], worker_version_info
         end).args...))
         if status != :ok
             @error "failed to startup, status: $status"
@@ -295,56 +301,33 @@ Comonicon.@cast function run(input_dir::AbstractString, output_dir::AbstractStri
                 @error result
                 println_list(list_file, "Error starting job")
             end
-            close(detect_mult_runners_t)
             return 1
         end
-        worker_versioninfo = result[5]
+        worker_versioninfo = result[2]
         header_sha256 = open(joinpath(jobout,"header.json")) do io
             sha256(io)
         end
         println_list(list_file, "header_sha256 = $(bytes2hex(header_sha256))")
-        snapshot0_sha256 = open(joinpath(jobout,"snapshots","snapshot0.h5")) do io
-            sha256(io)
-        end
+        snapshot0_sha256 = my_tree_hash(joinpath(snapshots_dir,"snapshot$step.zarr"))
         println_list(list_file,
             "$(Dates.format(now(),DATE_FORMAT)), \
-            $(lpad(0,STEP_PAD)), \
+            $(lpad(step,STEP_PAD)), \
             $worker_nthreads, \
             $worker_versioninfo, \
-            $(result[3]), \
+            $(result[1]), \
             $(bytes2hex(snapshot0_sha256))"
         )
-        snapshot1_sha256 = open(joinpath(jobout,"snapshots","snapshot1.h5")) do io
-            sha256(io)
-        end
-        println_list(list_file,
-            "$(Dates.format(now(),DATE_FORMAT)), \
-            $(lpad(1,STEP_PAD)), \
-            $worker_nthreads, \
-            $worker_versioninfo, \
-            $(result[4]), \
-            $(bytes2hex(snapshot1_sha256))"
-        )
-        if result[1]
-            @info "simulation completed"
-            println_list(list_file, "Done")
-            close(detect_mult_runners_t)
-            return 0
-        end
-        step = 1
-        @info "step 1 of $(result[2]) done"
+        @info "simulation started"
     else
         # Continue from an old job
         @info "continuing job"
         # check list_info is valid 
         if list_info.input_tree_hash != input_tree_hash
             @error "input_tree_hash was $(bytes2hex(list_info.input_tree_hash)) now is $(bytes2hex(input_tree_hash))"
-            close(detect_mult_runners_t)
             return 1
         end
         if list_info.job_idx != job_idx
             @error "job_idx was $(list_info.job_idx) now is $job_idx"
-            close(detect_mult_runners_t)
             return 1
         end
         # header isn't needed to continue the simulation, if the input hasn't changed, lets assume the header is still OK
@@ -353,12 +336,10 @@ Comonicon.@cast function run(input_dir::AbstractString, output_dir::AbstractStri
         snapshot_i = length(list_info.snapshot_infos)
         while snapshot_i > 0
             snapshot_info = list_info.snapshot_infos[snapshot_i]
-            snapshot_file = joinpath(jobout,"snapshots","snapshot$(snapshot_info.step_number).h5")
-            if isfile(snapshot_file)
-                snapshot_file_sha256 = open(snapshot_file) do io
-                    sha256(io)
-                end
-                if snapshot_info.snapshot_sha256 == snapshot_file_sha256
+            snapshot_dir = joinpath(jobout,"snapshots","snapshot$(snapshot_info.step_number).zarr")
+            if isdir(snapshot_dir)
+                snapshot_sha256 = my_tree_hash(snapshot_dir)
+                if snapshot_info.snapshot_sha256 == snapshot_sha256
                     break
                 end
             end
@@ -366,33 +347,19 @@ Comonicon.@cast function run(input_dir::AbstractString, output_dir::AbstractStri
         end
         if iszero(snapshot_i)
             @error "none of the recorded snapshots are valid."
-            close(detect_mult_runners_t)
             return 1
         end
         snapshot_info = list_info.snapshot_infos[snapshot_i]
-        snapshot_file = joinpath(jobout,"snapshots","snapshot$(snapshot_info.step_number).h5")
         step = snapshot_info.step_number
-        worker_rng_state = (snapshot_info.rngstate.s0, snapshot_info.rngstate.s1, snapshot_info.rngstate.s2, snapshot_info.rngstate.s3)
 
         @info "restarting simulation from step $step"
 
         # delete stuff from dir and remake it
-        snapshot_dir = joinpath(jobout,"snapshots")
         #rewrite list file to remove broken lines.
         list_file_str = join(list_file_good_lines[begin:end-(length(list_info.snapshot_infos)-snapshot_i)], "\n")*"\n"
         write(joinpath(jobout,"list.txt"), list_file_str)
-        list_file = Base.Filesystem.open(joinpath(jobout,"list.txt"), log_flags, log_perm)
-
-        status, result = run_with_timeout(worker, startup_timeout, Expr(worker_startup_code.head, worker_startup_code.args..., (quote
-            step::Int = $step
-            state = HDF5.h5open(joinpath($jobout,"snapshots","snapshot$step.h5"), "r") do job_file
-                copy!(Random.default_rng(), Random.Xoshiro(($worker_rng_state)...))
-                UserCode.load_snapshot(step, job_file, state)
-            end
-            isdone::Bool, expected_final_step::Int64 = UserCode.done(step, state)
-            copy!(worker_rng_copy, Random.default_rng())
-            isdone, expected_final_step, worker_version_info
-        end).args...))
+        list_file = Base.Filesystem.open(joinpath(jobout,"list.txt"), LOG_FLAGS, LOG_PERMISSIONS)
+        status, result = run_with_timeout(worker, startup_timeout, WORKER_STARTUP_CODE)
         if status != :ok
             @error "failed to restartup, status: $status"
             if status === :timed_out
@@ -401,50 +368,75 @@ Comonicon.@cast function run(input_dir::AbstractString, output_dir::AbstractStri
                 @error result
                 println_list(list_file, "Error starting job")
             end
-            close(detect_mult_runners_t)
             return 1
         end
+        # set globals
+        remotecall_fetch(worker, step, snapshot_info.rngstate) do _step, _rngstate
+            global step = _step
+            copy!(Random.default_rng(), _rngstate)
+            nothing
+        end
+        status, result = run_with_timeout(worker, startup_timeout, quote
+            state = load_snapshot(step, StorageTrees.load_dir(joinpath(jobout,"snapshots","snapshot$step.zarr")), state)
+            isdone::Bool, expected_final_step::Int64 = UserCode.done(step, state)
+            copy!(worker_rng_copy, Random.default_rng())
+            isdone, expected_final_step, worker_version_info
+        end)
+        if status != :ok
+            @error "failed to restartup, status: $status"
+            if status === :timed_out
+                println_list(list_file, "Error startup_timeout of $startup_timeout seconds reached")
+            else
+                @error result
+                println_list(list_file, "Error starting job")
+            end
+            return 1
+        end
+
         @info "done restarting simulation from step $step"
         worker_versioninfo = result[3]
 
         if result[1]
             @info "simulation completed"
             println_list(list_file, "Done")
-            close(detect_mult_runners_t)
             return 0
         end
     end
+    first_step::Bool = true
     while step < max_steps
-        status, result = run_with_timeout(worker, step_timeout, quote
+        # On the first step use startup_timeout because the sim needs to compile.
+        timeout = if first_step
+            startup_timeout
+        else
+            step_timeout
+        end
+        status, result = run_with_timeout(worker, timeout, quote
             copy!(Random.default_rng(), worker_rng_copy)
             state = UserCode.loop(step, state)
             step += 1
-            state = HDF5.h5open(joinpath($jobout,"snapshots","snapshot$step.h5"), "w") do job_file
-                UserCode.save_snapshot(step, job_file, state)
-                worker_rng_str0[] = worker_rng_2_str()
-                UserCode.load_snapshot(step, job_file, state)
-            end
+            state = save_load_snapshot_dir(step, jobout, worker_rng_str, state)
             isdone::Bool, expected_final_step::Int64 = UserCode.done(step, state)
             copy!(worker_rng_copy, Random.default_rng())
-            isdone, expected_final_step, worker_rng_str0[]
+            isdone, expected_final_step, worker_rng_str[]
         end)
         step += 1
         if status != :ok
             @error "failed to step, status: $status"
             if status === :timed_out
-                @error "step_timeout of $step_timeout seconds reached"
-                println_list(list_file, "Error step_timeout of $step_timeout seconds reached")
+                if first_step
+                    println_list(list_file, "Error startup_timeout of $startup_timeout seconds reached")
+                else
+                    @error "step_timeout of $step_timeout seconds reached"
+                    println_list(list_file, "Error step_timeout of $step_timeout seconds reached")
+                end
             else
                 @error result
                 println_list(list_file, "Error running job")
             end
-            close(detect_mult_runners_t)
             return 1
         end
-        snapshot_filename = joinpath(jobout,"snapshots","snapshot$step.h5")
-        snapshot_sha256 = open(snapshot_filename) do io
-            sha256(io)
-        end
+        snapshot_dir = joinpath(jobout,"snapshots","snapshot$step.zarr")
+        snapshot_sha256 = my_tree_hash(snapshot_dir)
         println_list(list_file,
             "$(Dates.format(now(),DATE_FORMAT)), \
             $(lpad(step,STEP_PAD)), \
@@ -458,22 +450,23 @@ Comonicon.@cast function run(input_dir::AbstractString, output_dir::AbstractStri
         if result[1]
             @info "simulation completed"
             println_list(list_file, "Done")
-            close(detect_mult_runners_t)
             return 0
         end
-
-        if filesize(snapshot_filename) > max_snapshot_MB*2^20
-            @error "snapshot too large, $(filesize(snapshot_filename)/2^20) MB"
+        snapshot_dir_size = sum(x->sum(y->filesize(joinpath(x[1],y)), x[3]; init=0), walkdir(snapshot_dir); init=0)
+        if snapshot_dir_size > max_snapshot_MB*2^20
+            @error "snapshot too large, $(snapshot_dir_size/2^20) MB"
             @error "max_snapshot_MB of $max_snapshot_MB MB reached"
             println_list(list_file, "Error max_snapshot_MB of $max_snapshot_MB MB reached")
-            close(detect_mult_runners_t)
             return 1
         end
+        first_step = false
     end
     @error "max_steps of $max_steps steps reached"
     println_list(list_file, "Error max_steps of $max_steps steps reached")
-    close(detect_mult_runners_t)
     return 1
+    end # logging end
+    close(detect_mult_runners_t)
+    return_code
 end
 
 

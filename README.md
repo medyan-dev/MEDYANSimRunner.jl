@@ -71,9 +71,11 @@ Return the state of the system as a `StorageTrees.ZGroup`
 This function should not mutate `state`
 
 #### `load_snapshot(step::Int, group::StorageTrees.ZGroup, state) -> state`
-Load the state saved by `save_snapshot` `group`
+Load the state saved by `save_snapshot`
 This function can mutate `state`.
 `state` may be the state returned from `setup` or the `state` returned by `loop`.
+This function should return the same output if `state` is the state returned by `loop` or the 
+state returned by `setup`.
 
 #### `done(step::Int, state) -> done::Bool, expected_final_step::Int`
 Return true if the simulation is done, or false if `loop` should be called again.
@@ -101,23 +103,18 @@ create output directory if it doesn't exist
 job_header, state =  setup(job_idx)
 save job_header
 step = 0
-group = 
+make snapshot_dir path for step 0
 StorageTrees.save_dir(snapshot_dir, save_snapshot(step, state))
 state = load_snapshot(step, StorageTrees.load_dir(snapshot_dir), state)
 while true
     state = loop(step, state)
     step = step + 1
-    job_file = create snapshot file(step)
-    save_snapshot(step, job_file, state)
-    state = load_snapshot(step, job_file, state)
-    close(job_file)
+    make snapshot_dir path for step step
+    StorageTrees.save_dir(snapshot_dir, save_snapshot(step, state))
+    state = load_snapshot(step, StorageTrees.load_dir(snapshot_dir), state)
     if done(step::Int, state)[1]
         break
     end
-end
-    
-    
-
 end
 ```
 
@@ -153,7 +150,7 @@ version = 1, job_idx = 1, input_tree_hash = 5a936e..., 54bf8d69288...
 ```
 - `version`: version of the info.txt format.
 - `job_idx`: index of the job. 
-- `input_tree_hash`: hash of input directory
+- `input_tree_hash`: hash of input directory calculated with [`my_tree_hash`](src/treehash.jl)
 
 The second line is:
 ```
@@ -171,6 +168,8 @@ These have the format:
 ```
 yyyy-mm-dd HH:MM:SS, step number, nthreads, julia versioninfo, rng state, snapshot sha256, line sha256
 ```
+
+`snapshot sha256` is calculated with [`my_tree_hash`](src/treehash.jl)
 
 The final line explains how the simulation ended it can be one of the following:
 ```
@@ -205,5 +204,5 @@ See the log files for more details and error messages.
 
 
 ### `snapshots` subdirectory
-Contains `snapshot$i.h5` files where `i` is the step of the simulation.
-The state returned by `setup` is stored in `snapshot0.h5`
+Contains `snapshot$i.zarr` sub directories where `i` is the step of the simulation.
+The state returned by `setup` is stored in `snapshot0.zarr`

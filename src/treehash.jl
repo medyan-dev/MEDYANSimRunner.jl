@@ -17,7 +17,7 @@ function my_tree_hash(path::AbstractString)::Vector{UInt8}
             sha256(f)
         end
     elseif isdir(path)
-        names = filter(readdir(path)) do name
+        names = filter(readdir(path; sort=true)) do name
             namepath = joinpath(path,name)
             !islink(namepath) && name != ".DS_Store"
         end
