@@ -1,7 +1,7 @@
 # fibonacci sequence
 
 
-using HDF5
+using StorageTrees
 using Random
 using SHA
 using OrderedCollections: OrderedDict
@@ -30,13 +30,15 @@ function setup(job_idx::Int)
     header, state
 end
 
-function save_snapshot(step::Int, hdf5_group, state)
-    hdf5_group["states"] = state
+function save_snapshot(step::Int, state)::ZGroup
     @info "saving states" state
+    group = ZGroup()
+    group["states"] = state
+    group
 end
 
-function load_snapshot(step::Int, hdf5_group, state)
-    state .= read(hdf5_group["states"])
+function load_snapshot(step::Int, group, state)
+    state .= collect(group["states"])
     state
 end
 

@@ -62,22 +62,15 @@ const WORKER_STARTUP_CODE = Expr(:toplevel, (quote
     worker_timestamp_logger(logger) = LoggingExtras.TransformerLogger(logger) do log
         merge(log, (; message = "$(Dates.format(Dates.now(), $DATE_FORMAT)) $(log.message)"))
     end
-    jobout = ENV["MEDYAN_JOBOUT"]
-    LoggingExtras.TeeLogger(
-        # Logging.global_logger(),
-        worker_timestamp_logger(Logging.ConsoleLogger(Base.Filesystem.open(joinpath(jobout,"info.log"),  $LOG_FLAGS, $LOG_PERMISSIONS), Logging.Info)),
-        worker_timestamp_logger(Logging.ConsoleLogger(Base.Filesystem.open(joinpath(jobout,"warn.log"),  $LOG_FLAGS, $LOG_PERMISSIONS), Logging.Warn)),
-        worker_timestamp_logger(Logging.ConsoleLogger(Base.Filesystem.open(joinpath(jobout,"error.log"), $LOG_FLAGS, $LOG_PERMISSIONS), Logging.Error)),
-    ) |> Logging.global_logger
 
     const worker_version_info::String = """
-    Julia Version: $VERSION \
-    OS: $(Sys.iswindows() ? "Windows" : Sys.isapple() ? "macOS" : Sys.KERNEL) ($(Sys.MACHINE)) \
-    CPU: $(Sys.cpu_info()[1].model) \
-    WORD_SIZE: $(Sys.WORD_SIZE) \
-    LIBM: $(Base.libm_name) \
-    LLVM: libLLVM-$(Base.libllvm_version) ($(Sys.JIT) $(Sys.CPU_NAME)) \
-    Threads: $(Threads.nthreads()) on $(Sys.CPU_THREADS) virtual cores \
+        Julia Version: $VERSION \
+        OS: $(Sys.iswindows() ? "Windows" : Sys.isapple() ? "macOS" : Sys.KERNEL) ($(Sys.MACHINE)) \
+        CPU: $(Sys.cpu_info()[1].model) \
+        WORD_SIZE: $(Sys.WORD_SIZE) \
+        LIBM: $(Base.libm_name) \
+        LLVM: libLLVM-$(Base.libllvm_version) ($(Sys.JIT) $(Sys.CPU_NAME)) \
+        Threads: $(Threads.nthreads()) on $(Sys.CPU_THREADS) virtual cores \
     """
 
     """
@@ -94,6 +87,9 @@ const WORKER_STARTUP_CODE = Expr(:toplevel, (quote
 
     const worker_rng_str = Ref("")
     const worker_rng_copy = copy(Random.default_rng())
+    global jobout::String = ""
+    global step = 0
+    global job_idx = 1
     module UserCode
         include("main.jl")
     end
@@ -103,11 +99,17 @@ const WORKER_STARTUP_CODE = Expr(:toplevel, (quote
         rm(snapshot_dir; force=true, recursive=true)
         StorageTrees.save_dir(snapshot_dir, UserCode.save_snapshot(step, state))
         worker_rng_str[] = worker_rng_2_str()
-        load_snapshot(step, StorageTrees.load_dir(snapshot_dir), state)
+        UserCode.load_snapshot(step, StorageTrees.load_dir(snapshot_dir), state)
     end
 
-    job_header, state =  UserCode.setup($job_idx)
-    step::Int = 0
+    function setup_logging(jobout)
+        LoggingExtras.TeeLogger(
+            # Logging.global_logger(),
+            worker_timestamp_logger(Logging.ConsoleLogger(Base.Filesystem.open(joinpath(jobout,"info.log"),  $LOG_FLAGS, $LOG_PERMISSIONS), Logging.Info)),
+            worker_timestamp_logger(Logging.ConsoleLogger(Base.Filesystem.open(joinpath(jobout,"warn.log"),  $LOG_FLAGS, $LOG_PERMISSIONS), Logging.Warn)),
+            worker_timestamp_logger(Logging.ConsoleLogger(Base.Filesystem.open(joinpath(jobout,"error.log"), $LOG_FLAGS, $LOG_PERMISSIONS), Logging.Error)),
+        ) |> Logging.global_logger
+    end
     nothing
 end).args...)
 
@@ -255,16 +257,23 @@ Comonicon.@cast function run(input_dir::AbstractString, output_dir::AbstractStri
         topology=:master_worker,
         exeflags="--project",
         dir=input_dir,
-        env = [
-            "JULIA_WORKER_TIMEOUT"=>"60.0",
-            "MEDYAN_JOBOUT"=>jobout,
-
-        ],
     )[1]
 
     worker_nthreads = remotecall_fetch(Threads.nthreads, worker)
     wait(detect_mult_runners_startup)
 
+
+    "Log start up error and return 1"
+    function startup_error(list_file, status, result)
+        @error "failed to startup, status: $status"
+        if status == :timed_out
+            println_list(list_file, "Error startup_timeout of $startup_timeout seconds reached")
+        else
+            @error result
+            println_list(list_file, "Error starting job")
+        end
+        return 1
+    end
     
 
     # if list is empty start new job, otherwise continue the job
@@ -285,24 +294,22 @@ Comonicon.@cast function run(input_dir::AbstractString, output_dir::AbstractStri
         )
 
         @info "starting up simulation"
-        status, result = run_with_timeout(worker, startup_timeout, Expr(WORKER_STARTUP_CODE.head, WORKER_STARTUP_CODE.args..., (quote
+        status, result = run_with_timeout(worker, startup_timeout, WORKER_STARTUP_CODE)
+        status == :ok || return startup_error(list_file, status, result)
+        status, result = run_with_timeout(worker, startup_timeout, quote
+            global step = $step
+            global job_idx = $job_idx
+            global jobout = $jobout
+            setup_logging(jobout)
+            job_header, state =  UserCode.setup(job_idx)
             open(joinpath(jobout,"header.json"), "w") do io
                 JSON3.pretty(io, job_header; allow_inf = true)
             end
             state = save_load_snapshot_dir(step, jobout, worker_rng_str, state)
             copy!(worker_rng_copy, Random.default_rng())
             worker_rng_str[], worker_version_info
-        end).args...))
-        if status != :ok
-            @error "failed to startup, status: $status"
-            if status === :timed_out
-                println_list(list_file, "Error startup_timeout of $startup_timeout seconds reached")
-            else
-                @error result
-                println_list(list_file, "Error starting job")
-            end
-            return 1
-        end
+        end)
+        status == :ok || return startup_error(list_file, status, result)
         worker_versioninfo = result[2]
         header_sha256 = open(joinpath(jobout,"header.json")) do io
             sha256(io)
@@ -360,38 +367,22 @@ Comonicon.@cast function run(input_dir::AbstractString, output_dir::AbstractStri
         write(joinpath(jobout,"list.txt"), list_file_str)
         list_file = Base.Filesystem.open(joinpath(jobout,"list.txt"), LOG_FLAGS, LOG_PERMISSIONS)
         status, result = run_with_timeout(worker, startup_timeout, WORKER_STARTUP_CODE)
-        if status != :ok
-            @error "failed to restartup, status: $status"
-            if status === :timed_out
-                println_list(list_file, "Error startup_timeout of $startup_timeout seconds reached")
-            else
-                @error result
-                println_list(list_file, "Error starting job")
-            end
-            return 1
-        end
+        status == :ok || return startup_error(list_file, status, result)
         # set globals
-        remotecall_fetch(worker, step, snapshot_info.rngstate) do _step, _rngstate
-            global step = _step
-            copy!(Random.default_rng(), _rngstate)
-            nothing
-        end
+        worker_rng_state = (snapshot_info.rngstate.s0, snapshot_info.rngstate.s1, snapshot_info.rngstate.s2, snapshot_info.rngstate.s3)
         status, result = run_with_timeout(worker, startup_timeout, quote
-            state = load_snapshot(step, StorageTrees.load_dir(joinpath(jobout,"snapshots","snapshot$step.zarr")), state)
+            global step = $step
+            global job_idx = $job_idx
+            global jobout = $jobout
+            setup_logging(jobout)
+            job_header, state =  UserCode.setup(job_idx)
+            copy!(Random.default_rng(), Random.Xoshiro(($worker_rng_state)...))
+            state = UserCode.load_snapshot(step, StorageTrees.load_dir(joinpath(jobout,"snapshots","snapshot$step.zarr")), state)
             isdone::Bool, expected_final_step::Int64 = UserCode.done(step, state)
             copy!(worker_rng_copy, Random.default_rng())
             isdone, expected_final_step, worker_version_info
         end)
-        if status != :ok
-            @error "failed to restartup, status: $status"
-            if status === :timed_out
-                println_list(list_file, "Error startup_timeout of $startup_timeout seconds reached")
-            else
-                @error result
-                println_list(list_file, "Error starting job")
-            end
-            return 1
-        end
+        status == :ok || return startup_error(list_file, status, result)
 
         @info "done restarting simulation from step $step"
         worker_versioninfo = result[3]
