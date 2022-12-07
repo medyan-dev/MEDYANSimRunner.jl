@@ -1,78 +1,9 @@
 # functions to show the difference between two job outputs
 
 import DeepDiffs
-using HDF5
+using StorageTrees
 import JSON3
 
-"""
-    hdf5_print_diff(io, group1::Union{HDF5.File, HDF5.Group}, group2::Union{HDF5.File, HDF5.Group}, group1name="group1", group2name="group2", header="", ignorename=Returns(false))
-
-Print the difference between the HDF5 groups
-"""
-function hdf5_print_diff(io, group1::Union{HDF5.File, HDF5.Group}, group2::Union{HDF5.File, HDF5.Group}, group1name="group1", group2name="group2", header="", ignorename=Returns(false))
-    #check both groups have same keys
-    ks1 = Set(keys(group1))
-    ks2 = Set(keys(group2))
-    diffks1 = sort(collect(setdiff(ks1,ks2)))
-    diffks2 = sort(collect(setdiff(ks2,ks1)))
-    foreach(diffks1) do diffk
-        ignorename(diffk) && return
-        println(io,"\"$header$diffk\" in $group1name but not in $group2name")
-    end
-    foreach(diffks2) do diffk
-        ignorename(diffk) && return
-        println(io,"\"$header$diffk\" in $group2name but not in $group1name")
-    end
-    #check attributes are equal
-	hdf5_print_attrs_diff(io, group1, group2, group1name, group2name, header, ignorename)
-    sharedkeys= sort(collect(ks1 ∩ ks2))
-    foreach(sharedkeys) do key
-        ignorename(key) && return
-        hdf5_print_diff(io, group1[key], group2[key], group1name, group2name, header*key*"/", ignorename)
-    end
-end
-
-function hdf5_print_diff(io, group1::HDF5.Dataset, group2::HDF5.Dataset, group1name="group1", group2name="group2", header="", ignorename=Returns(false))
-    hdf5_print_attrs_diff(io, group1, group2, group1name, group2name, header, ignorename)
-    data1 = read(group1)
-    data2 = read(group2)
-    if !isequal(data1,data2)
-		for (groupname,data) in [(group1name,data1),(group2name,data2)]
-			if isempty(header)
-				println(io,"read($groupname):")
-			else
-				println(io,"read($groupname[\"$header\"]):")
-			end
-			show(io,data)
-			println(io)
-		end
-    end
-end
-
-function hdf5_print_diff(io, group1::Union{HDF5.File, HDF5.Group, HDF5.Dataset}, group2::Union{HDF5.File, HDF5.Group, HDF5.Dataset}, group1name="group1", group2name="group2", header="", ignorename=Returns(false))
-	if isempty(header)
-		println(io, "$group1name isa $(typeof(group1)), $group2name isa $(typeof(group2))")
-	else
-		println(io, "$group1name[\"$header\"] isa $(typeof(group1)), $group2name[\"$header\"] isa $(typeof(group2))")
-	end
-end
-
-function hdf5_print_attrs_diff(io, group1::Union{HDF5.File, HDF5.Group, HDF5.Dataset}, group2::Union{HDF5.File, HDF5.Group, HDF5.Dataset}, group1name="group1", group2name="group2", header="", ignorename=Returns(false))
-	for (groupaname,groupa,groupb) in [(group1name,group1,group2),(group2name,group2,group1)]
-		diffas = sort(collect(setdiff(attrs(groupa),attrs(groupb))); by=(x->x[1]))
-	    foreach(diffas) do (k,v)
-            ignorename(k) && return
-			if isempty(header)
-				print(io,"attrs($groupaname)")
-			else
-				print(io,"attrs($groupaname[\"$header\"])")
-			end
-			print(io,"[\"$k\"] is ")
-			show(io, v)
-			println(io)
-	    end
-	end
-end
 
 """
     print_json_diff(io::IO, json1::AbstractString, json2::AbstractString)
@@ -138,7 +69,7 @@ Prints the difference between two job output directories.
 
 Ignores time stamp differences and julia version differences in the list.txt file.
 
-Ignores anything in the snapshot files that have an HDF5 name starting with a #
+Ignores anything in the snapshot files that has a name starting with a #
 
 # Args
 
@@ -156,7 +87,7 @@ Prints the difference between two job output directories.
 
 Ignores time stamp differences and julia version differences in the list.txt file.
 
-Ignores anything in the snapshot files that have an HDF5 name starting with a #
+Ignores anything in the snapshot files that has a name starting with a #
 
 # Args
 
@@ -202,11 +133,9 @@ function diff(io::IO, jobout1::AbstractString, jobout2::AbstractString)
         for snapshotname in (snapshots1 ∩ snapshots2)
             full_name1 = joinpath(jobout1, "snapshots", snapshotname)
             full_name2 = joinpath(jobout2, "snapshots", snapshotname)
-            HDF5.h5open(full_name1, "r") do file1
-                HDF5.h5open(full_name2, "r") do file2
-                    hdf5_print_diff(io, file1, file2, full_name1, full_name2, "", startswith("#"))
-                end
-            end
+            group1 = StorageTrees.load_dir(full_name1)
+            group2 = StorageTrees.load_dir(full_name2)
+            StorageTrees.print_diff(io, group1, group2, full_name1, full_name2, "", startswith("#"))
         end
     elseif snapshot1dir_exists && !snapshot2dir_exists
         println(io, snapshot2dir, " dir missing or empty")

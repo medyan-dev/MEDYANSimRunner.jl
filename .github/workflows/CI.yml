@@ -14,6 +14,9 @@ jobs:
   test:
     name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }} - ${{ github.event_name }}
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
@@ -33,5 +36,29 @@ jobs:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
       - uses: julia-actions/cache@v1
+      - name: Add MEDYANRegistry
+        run: |
+          julia -e '
+            using Pkg
+            Pkg.Registry.add(RegistrySpec(url = "https://github.com/medyan-dev/MEDYANRegistry.git"))
+            Pkg.Registry.add(RegistrySpec(url = "https://github.com/JuliaRegistries/General"))'
+      - name: Develop packages
+        run: |
+          julia --project=test -e '
+            using Pkg
+            Pkg.develop([PackageSpec(path=pwd())])
+            Pkg.instantiate()'
       - uses: julia-actions/julia-buildpkg@v1
-      - uses: julia-actions/julia-runtest@v1
+        with:
+          project: test
+      - name: Print package status
+        run: |
+          julia --project=test -e '
+            using InteractiveUtils
+            versioninfo()
+            using Pkg
+            Pkg.status(;mode=Pkg.PKGMODE_MANIFEST)'
+      - name: Run tests
+        run: |
+          cd test && 
+          julia --project --color=yes --depwarn=yes --warn-overwrite=yes --warn-scope=yes --check-bounds=yes  runtests.jl
