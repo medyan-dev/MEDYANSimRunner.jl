@@ -6,7 +6,7 @@ Return a vector of bytes representing the hash of a directory.
 
 This is just used as a weak kind of checksum, not for cryptographic purposes.
 
-Any sub-directories or files with names starting with a "." will be ignored.
+Any sub-directories or files with names beginning with a "." will be ignored.
 Empty directories will NOT be ignored.
 Any link will be ignored.
 File permission and other metadata will be ignored.
@@ -17,7 +17,7 @@ function my_tree_hash(path::AbstractString)::Vector{UInt8}
             sha256(f)
         end
     elseif isdir(path)
-        names = filter(readdir(path; sort=true)) do name
+        names = filter(readdir(path)) do name
             namepath = joinpath(path,name)
             !islink(namepath) && !startswith(name,'.')
         end
