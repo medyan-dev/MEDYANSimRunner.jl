@@ -69,7 +69,7 @@ Prints the difference between two job output directories.
 
 Ignores time stamp differences and julia version differences in the list.txt file.
 
-Ignores anything in the snapshot files that have an HDF5 name starting with a #
+Ignores anything in the snapshot files that has a name starting with a #
 
 # Args
 
@@ -87,7 +87,7 @@ Prints the difference between two job output directories.
 
 Ignores time stamp differences and julia version differences in the list.txt file.
 
-Ignores anything in the snapshot files that have an HDF5 name starting with a #
+Ignores anything in the snapshot files that has a name starting with a #
 
 # Args
 
