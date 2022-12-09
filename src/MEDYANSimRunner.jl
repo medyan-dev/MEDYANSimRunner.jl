@@ -187,14 +187,23 @@ Start or continue a simulation job.
 - `--startup_timeout`: max amount of time job startup can take in seconds.
 - `--max_snapshot_MB`: max amount of disk space one snapshot can take up.
 
+# Flags
+
+- `--force, -f`: delete existing "<output_dir>/out<job_idx>") if it exists, and restart the simulation.
+
 """
 Comonicon.@cast function run(input_dir::AbstractString, output_dir::AbstractString, job_idx::Int;
         step_timeout::Float64=100.0,
         max_steps::Int=1_000_000,
         startup_timeout::Float64=1000.0,
         max_snapshot_MB::Float64=1E3,
+        force::Bool=false,
     )::Int
     job_idx > 0 || throw(ArgumentError("job_idx must be greater than 0"))
+
+    if force
+        rm(joinpath(output_dir,"out$job_idx"); force=true, recursive=true)
+    end
 
     # first make the output folder
     jobout = abspath(mkpath(joinpath(output_dir,"out$job_idx")))
