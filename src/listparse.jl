@@ -40,8 +40,10 @@ Parse a list file.
 Return a ListFileV1, and a vector of the good lines of the file, if successful,
 If the file doesn't exist or is too short, return an empty ListFileV1.
 If there is some error parsing, throw an error.
+
+if `ignore_error == true` ignore the last good line if it starts with "Error"
 """
-function parse_list_file(listpath::AbstractString)
+function parse_list_file(listpath::AbstractString; ignore_error::Bool=false)
     if !isfile(listpath)
         return ListFileV1(), String[]
     end
@@ -54,6 +56,10 @@ function parse_list_file(listpath::AbstractString)
         linestr, linesha = l
         reallinesha = bytes2hex(sha256(linestr))
         reallinesha == linesha
+    end
+    #&& !isempty(good_rawlines)
+    if ignore_error && startswith(good_rawlines[end], "Error")
+        pop!(good_rawlines)
     end
     
     # Return empty list file if too short

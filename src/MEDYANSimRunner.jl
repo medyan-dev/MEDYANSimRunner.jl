@@ -190,6 +190,7 @@ Start or continue a simulation job.
 # Flags
 
 - `--force, -f`: delete existing "<output_dir>/out<job_idx>") if it exists, and restart the simulation.
+- `--ignore_error, -i`: ignore previous error when restarting the simulation.
 
 """
 Comonicon.@cast function run(input_dir::AbstractString, output_dir::AbstractString, job_idx::Int;
@@ -198,6 +199,7 @@ Comonicon.@cast function run(input_dir::AbstractString, output_dir::AbstractStri
         startup_timeout::Float64=1000.0,
         max_snapshot_MB::Float64=1E3,
         force::Bool=false,
+        ignore_error::Bool=false,
     )::Int
     job_idx > 0 || throw(ArgumentError("job_idx must be greater than 0"))
 
@@ -245,7 +247,7 @@ Comonicon.@cast function run(input_dir::AbstractString, output_dir::AbstractStri
     end
     
     list_info, list_file_good_lines = try
-        parse_list_file(joinpath(jobout,"list.txt"))
+        parse_list_file(joinpath(jobout,"list.txt");ignore_error)
     catch ex
         @error "invalid list.txt syntax." exception=ex
         return 1

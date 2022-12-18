@@ -8,6 +8,8 @@ using Random
 @testset "list.txt doesn't exist" begin
     list_info, _ = MEDYANSimRunner.parse_list_file("not a file")
     @test iszero(list_info.job_idx) # list is empty
+    list_info, _ = MEDYANSimRunner.parse_list_file("not a file";ignore_error=true)
+    @test iszero(list_info.job_idx) # list is empty
 end
 @testset "list.txt startup error" begin
     list_info, _ = MEDYANSimRunner.parse_list_file("list-examples/list start error.txt")
