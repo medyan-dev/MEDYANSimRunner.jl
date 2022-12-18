@@ -57,8 +57,7 @@ function parse_list_file(listpath::AbstractString; ignore_error::Bool=false)
         reallinesha = bytes2hex(sha256(linestr))
         reallinesha == linesha
     end
-    #&& !isempty(good_rawlines)
-    if ignore_error && startswith(good_rawlines[end], "Error")
+    if ignore_error && !isempty(good_rawlines) && startswith(good_rawlines[end], "Error")
         pop!(good_rawlines)
     end
     
