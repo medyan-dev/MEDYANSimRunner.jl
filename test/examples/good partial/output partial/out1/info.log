@@ -1,75 +1,75 @@
-[ Info: 2022-12-07 21:15:59 starting new job
-[ Info: 2022-12-07 21:15:59 starting up simulation
-┌ Info: 2022-12-07 21:16:13 saving states
+[ Info: 2023-01-03 18:23:21 starting new job
+[ Info: 2023-01-03 18:23:21 starting up simulation
+┌ Info: 2023-01-03 18:23:30 saving states
 │   state =
 │    2-element Vector{Int64}:
 │     0
 └     1
-[ Info: 2022-12-07 21:16:15 simulation started
-┌ Info: 2022-12-07 21:16:15 saving states
-│   state =
-│    2-element Vector{Int64}:
-│     1
-└     1
-[ Info: 2022-12-07 21:16:15 step 1 of 11 done
-┌ Info: 2022-12-07 21:16:15 saving states
+[ Info: 2023-01-03 18:23:32 simulation started
+┌ Info: 2023-01-03 18:23:32 saving states
 │   state =
 │    2-element Vector{Int64}:
 │     1
 └     2
-[ Info: 2022-12-07 21:16:15 step 2 of 11 done
-┌ Info: 2022-12-07 21:16:15 saving states
+[ Info: 2023-01-03 18:23:33 step 1 of 11 done
+┌ Info: 2023-01-03 18:23:33 saving states
 │   state =
 │    2-element Vector{Int64}:
 │     2
-└     4
-[ Info: 2022-12-07 21:16:15 step 3 of 11 done
-┌ Info: 2022-12-07 21:16:15 saving states
+└     3
+[ Info: 2023-01-03 18:23:33 step 2 of 11 done
+┌ Info: 2023-01-03 18:23:33 saving states
 │   state =
 │    2-element Vector{Int64}:
-│     4
-└     7
-[ Info: 2022-12-07 21:16:15 step 4 of 11 done
-┌ Info: 2022-12-07 21:16:15 saving states
+│     3
+└     5
+[ Info: 2023-01-03 18:23:33 step 3 of 11 done
+┌ Info: 2023-01-03 18:23:33 saving states
 │   state =
 │    2-element Vector{Int64}:
-│      7
-└     12
-[ Info: 2022-12-07 21:16:15 step 5 of 11 done
-┌ Info: 2022-12-07 21:16:15 saving states
+│     5
+└     9
+[ Info: 2023-01-03 18:23:33 step 4 of 11 done
+┌ Info: 2023-01-03 18:23:33 saving states
 │   state =
 │    2-element Vector{Int64}:
-│     12
-└     19
-[ Info: 2022-12-07 21:16:15 step 6 of 11 done
-┌ Info: 2022-12-07 21:16:15 saving states
+│      9
+└     14
+[ Info: 2023-01-03 18:23:33 step 5 of 11 done
+┌ Info: 2023-01-03 18:23:33 saving states
 │   state =
 │    2-element Vector{Int64}:
-│     19
-└     32
-[ Info: 2022-12-07 21:16:15 step 7 of 11 done
-┌ Info: 2022-12-07 21:16:15 saving states
+│     14
+└     23
+[ Info: 2023-01-03 18:23:33 step 6 of 11 done
+┌ Info: 2023-01-03 18:23:33 saving states
 │   state =
 │    2-element Vector{Int64}:
-│     32
-└     52
-[ Info: 2022-12-07 21:16:16 step 8 of 11 done
-┌ Info: 2022-12-07 21:16:16 saving states
+│     23
+└     37
+[ Info: 2023-01-03 18:23:33 step 7 of 11 done
+┌ Info: 2023-01-03 18:23:33 saving states
 │   state =
 │    2-element Vector{Int64}:
-│     52
-└     85
-[ Info: 2022-12-07 21:16:16 step 9 of 11 done
-┌ Info: 2022-12-07 21:16:16 saving states
+│     37
+└     61
+[ Info: 2023-01-03 18:23:33 step 8 of 11 done
+┌ Info: 2023-01-03 18:23:33 saving states
 │   state =
 │    2-element Vector{Int64}:
-│      85
-└     137
-[ Info: 2022-12-07 21:16:16 step 10 of 11 done
-┌ Info: 2022-12-07 21:16:16 saving states
+│     61
+└     98
+[ Info: 2023-01-03 18:23:33 step 9 of 11 done
+┌ Info: 2023-01-03 18:23:33 saving states
 │   state =
 │    2-element Vector{Int64}:
-│     137
-└     223
-[ Info: 2022-12-07 21:16:16 step 11 of 11 done
-[ Info: 2022-12-07 21:16:16 simulation completed
+│      98
+└     159
+[ Info: 2023-01-03 18:23:33 step 10 of 11 done
+┌ Info: 2023-01-03 18:23:33 saving states
+│   state =
+│    2-element Vector{Int64}:
+│     159
+└     258
+[ Info: 2023-01-03 18:23:34 step 11 of 11 done
+[ Info: 2023-01-03 18:23:34 simulation completed
