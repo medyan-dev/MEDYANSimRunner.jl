@@ -95,11 +95,10 @@ const WORKER_STARTUP_CODE = Expr(:toplevel, (quote
     end
 
     function save_load_snapshot_dir(step, jobout, worker_rng_str, state)
-        snapshot_dir = mkpath(joinpath(jobout,"snapshots","snapshot$step.zarr"))
-        rm(snapshot_dir; force=true, recursive=true)
-        StorageTrees.save_dir(snapshot_dir, UserCode.save_snapshot(step, state))
+        snapshot_path = joinpath(jobout,"snapshots","snapshot$step.zarr.zip")
+        StorageTrees.save_dir(snapshot_path, UserCode.save_snapshot(step, state))
         worker_rng_str[] = worker_rng_2_str()
-        UserCode.load_snapshot(step, StorageTrees.load_dir(snapshot_dir), state)
+        UserCode.load_snapshot(step, StorageTrees.load_dir(snapshot_path), state)
     end
 
     function setup_logging(jobout)
@@ -326,7 +325,7 @@ Comonicon.@cast function run(input_dir::AbstractString, output_dir::AbstractStri
             sha256(io)
         end
         println_list(list_file, "header_sha256 = $(bytes2hex(header_sha256))")
-        snapshot0_sha256 = my_tree_hash(joinpath(snapshots_dir,"snapshot$step.zarr"))
+        snapshot0_sha256 = my_tree_hash(joinpath(snapshots_dir,"snapshot$step.zarr.zip"))
         println_list(list_file,
             "$(Dates.format(now(),DATE_FORMAT)), \
             $(lpad(step,STEP_PAD)), \
@@ -354,9 +353,9 @@ Comonicon.@cast function run(input_dir::AbstractString, output_dir::AbstractStri
         snapshot_i = length(list_info.snapshot_infos)
         while snapshot_i > 0
             snapshot_info = list_info.snapshot_infos[snapshot_i]
-            snapshot_dir = joinpath(jobout,"snapshots","snapshot$(snapshot_info.step_number).zarr")
-            if isdir(snapshot_dir)
-                snapshot_sha256 = my_tree_hash(snapshot_dir)
+            snapshot_path = joinpath(jobout,"snapshots","snapshot$(snapshot_info.step_number).zarr.zip")
+            if isfile(snapshot_path)
+                snapshot_sha256 = my_tree_hash(snapshot_path)
                 if snapshot_info.snapshot_sha256 == snapshot_sha256
                     break
                 end
@@ -388,7 +387,7 @@ Comonicon.@cast function run(input_dir::AbstractString, output_dir::AbstractStri
             setup_logging(jobout)
             job_header, state =  UserCode.setup(job_idx)
             copy!(Random.default_rng(), Random.Xoshiro(($worker_rng_state)...))
-            state = UserCode.load_snapshot(step, StorageTrees.load_dir(joinpath(jobout,"snapshots","snapshot$step.zarr")), state)
+            state = UserCode.load_snapshot(step, StorageTrees.load_dir(joinpath(jobout,"snapshots","snapshot$step.zarr.zip")), state)
             isdone::Bool, expected_final_step::Int64 = UserCode.done(step, state)
             copy!(worker_rng_copy, Random.default_rng())
             isdone, expected_final_step, worker_version_info
@@ -437,8 +436,8 @@ Comonicon.@cast function run(input_dir::AbstractString, output_dir::AbstractStri
             end
             return 1
         end
-        snapshot_dir = joinpath(jobout,"snapshots","snapshot$step.zarr")
-        snapshot_sha256 = my_tree_hash(snapshot_dir)
+        snapshot_path = joinpath(jobout,"snapshots","snapshot$step.zarr.zip")
+        snapshot_sha256 = my_tree_hash(snapshot_path)
         println_list(list_file,
             "$(Dates.format(now(),DATE_FORMAT)), \
             $(lpad(step,STEP_PAD)), \
@@ -454,9 +453,9 @@ Comonicon.@cast function run(input_dir::AbstractString, output_dir::AbstractStri
             println_list(list_file, "Done")
             return 0
         end
-        snapshot_dir_size = sum(x->sum(y->filesize(joinpath(x[1],y)), x[3]; init=0), walkdir(snapshot_dir); init=0)
-        if snapshot_dir_size > max_snapshot_MB*2^20
-            @error "snapshot too large, $(snapshot_dir_size/2^20) MB"
+        snapshot_disk_size = filesize(snapshot_path)
+        if snapshot_disk_size > max_snapshot_MB*2^20
+            @error "snapshot too large, $(snapshot_disk_size/2^20) MB"
             @error "max_snapshot_MB of $max_snapshot_MB MB reached"
             println_list(list_file, "Error max_snapshot_MB of $max_snapshot_MB MB reached")
             return 1
