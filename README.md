@@ -103,15 +103,13 @@ create output directory if it doesn't exist
 job_header, state =  setup(job_idx)
 save job_header
 step = 0
-make snapshot_dir path for step 0
-StorageTrees.save_dir(snapshot_dir, save_snapshot(step, state))
-state = load_snapshot(step, StorageTrees.load_dir(snapshot_dir), state)
+StorageTrees.save_dir(snapshot_zip_file, save_snapshot(step, state))
+state = load_snapshot(step, StorageTrees.load_dir(snapshot_zip_file), state)
 while true
     state = loop(step, state)
     step = step + 1
-    make snapshot_dir path for step step
-    StorageTrees.save_dir(snapshot_dir, save_snapshot(step, state))
-    state = load_snapshot(step, StorageTrees.load_dir(snapshot_dir), state)
+    StorageTrees.save_dir(snapshot_zip_file, save_snapshot(step, state))
+    state = load_snapshot(step, StorageTrees.load_dir(snapshot_zip_file), state)
     if done(step::Int, state)[1]
         break
     end
@@ -169,7 +167,7 @@ These have the format:
 yyyy-mm-dd HH:MM:SS, step number, nthreads, julia versioninfo, rng state, snapshot sha256, line sha256
 ```
 
-`snapshot sha256` is calculated with [`my_tree_hash`](src/treehash.jl)
+`snapshot sha256` is the sha256 of the snapshot zip file.
 
 The final line explains how the simulation ended it can be one of the following:
 ```
@@ -204,5 +202,5 @@ See the log files for more details and error messages.
 
 
 ### `snapshots` subdirectory
-Contains `snapshot$i.zarr` sub directories where `i` is the step of the simulation.
-The state returned by `setup` is stored in `snapshot0.zarr`
+Contains `snapshot$i.zarr.zip` files where `i` is the step of the simulation.
+The state returned by `setup` is stored in `snapshot0.zarr.zip`
