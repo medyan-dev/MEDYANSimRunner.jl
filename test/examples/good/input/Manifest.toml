@@ -290,10 +290,10 @@ deps = ["LinearAlgebra", "SparseArrays"]
 uuid = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
 [[deps.StorageTrees]]
-deps = ["AbstractTrees", "ArgCheck", "Base64", "Blosc_jll", "CodecBzip2", "CodecZlib", "DataStructures", "EllipsisNotation", "JSON3", "StaticArrays", "StaticStrings", "StructArrays", "TranscodingStreams"]
-git-tree-sha1 = "98b337bf6b86a942b0862a00f70a2ca470c57649"
+deps = ["AbstractTrees", "ArgCheck", "Base64", "Blosc_jll", "CodecBzip2", "CodecZlib", "DataStructures", "EllipsisNotation", "JSON3", "StaticArrays", "StaticStrings", "StructArrays", "TranscodingStreams", "ZipFile"]
+git-tree-sha1 = "c5a6fe656c6de2f3411dc0436f60e3757d866f12"
 uuid = "d423b6e5-1c84-4ae2-8d2d-b903aee15ac7"
-version = "0.2.0"
+version = "0.3.0"
 
 [[deps.StructArrays]]
 deps = ["Adapt", "DataAPI", "GPUArraysCore", "StaticArraysCore", "Tables"]
@@ -349,6 +349,12 @@ uuid = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 
 [[deps.Unicode]]
 uuid = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
+
+[[deps.ZipFile]]
+deps = ["Libdl", "Printf", "Zlib_jll"]
+git-tree-sha1 = "f492b7fe1698e623024e873244f10d89c95c340a"
+uuid = "a5390f91-8eb1-5f08-bee0-b1d1ffed6cea"
+version = "0.10.1"
 
 [[deps.Zlib_jll]]
 deps = ["Libdl"]
