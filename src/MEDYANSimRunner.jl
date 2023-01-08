@@ -414,10 +414,12 @@ Comonicon.@cast function run(input_dir::AbstractString, output_dir::AbstractStri
         status, result = run_with_timeout(worker, timeout, quote
             copy!(Random.default_rng(), worker_rng_copy)
             state = UserCode.loop(step, state)
+            yield()
             step += 1
             state = save_load_snapshot_dir(step, jobout, worker_rng_str, state)
             isdone::Bool, expected_final_step::Int64 = UserCode.done(step, state)
             copy!(worker_rng_copy, Random.default_rng())
+            GC.gc() # TODO: remove this when Julia v1.9 is released
             isdone, expected_final_step, worker_rng_str[]
         end)
         step += 1
