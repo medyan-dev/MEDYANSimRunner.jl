@@ -193,7 +193,7 @@ Start or continue a simulation job.
 
 """
 Comonicon.@cast function run(input_dir::AbstractString, output_dir::AbstractString, job_idx::Int;
-        step_timeout::Float64=100.0,
+        step_timeout::Float64=1000.0,
         max_steps::Int=1_000_000,
         startup_timeout::Float64=1000.0,
         max_snapshot_MB::Float64=1E3,
