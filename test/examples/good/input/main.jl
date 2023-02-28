@@ -23,23 +23,23 @@ function setup(job_idx::String; kwargs...)
     header, state
 end
 
-function save_snapshot(step::Int, state)::ZGroup
+function save_snapshot(step::Int, state; kwargs...)::ZGroup
     @info "saving states" state
     group = ZGroup()
     group["states"] = state
     group
 end
 
-function load_snapshot(step::Int, group, state)
+function load_snapshot(step::Int, group, state; kwargs...)
     state .= collect(group["states"])
     state
 end
 
-function done(step::Int, state)
+function done(step::Int, state; kwargs...)
     step > 10, 11
 end
 
-function loop(step::Int, state)
+function loop(step::Int, state; kwargs...)
     a = sum(state) + rand(0:1)
     state[1] = state[2]
     state[2] = a
