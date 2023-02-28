@@ -21,7 +21,6 @@ Also set the default random number generator seed.
 `job_idx::String`: The job index starting with job 1. This is used for multi job simulations.
 """
 function setup(job_idx::String; kwargs...)
-    Random.seed!(parse(Int,job_idx))
     header = OrderedDict([
         "version" => "1.0.0",
         "model_name" => "fibonacci sequence"

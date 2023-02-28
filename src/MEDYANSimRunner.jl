@@ -177,7 +177,8 @@ Start or continue a simulation job.
 
 - `input_dir`: The input directory.
 - `output_dir`: The output directory.
-- `job_idx`: The job index for multi-job simulations.
+- `job_idx_or_file`: The job index for multi-job simulations, or a filename.
+- `job_line`: If specified, get the job index from this line in the `job_idx_or_file` file.
 
 # Options
 
@@ -206,44 +207,55 @@ Comonicon.@cast function run(
         ignore_error::Bool=false,
     )::Int
     # get job_idx
-    job_idx::String = if job_line == -1
-        job_idx_or_file
-    else
-        job_line > 0 || throw(ArgumentError("job_line must be greater than 0 if used"))
-        isfile(job_idx_or_file) || throw(ArgumentError("job_file: $(job_idx_or_file) missing"))
-        readlines(job_idx_or_file)[job_line]
+    job_idx::String, job_seed::BigInt = let job_idx_or_file = job_idx_or_file, job_line = job_line
+        local unnorm_job_idx::String = if job_line == -1
+            job_idx_or_file
+        else
+            job_line > 0 || throw(ArgumentError("job_line must be greater than 0 if used"))
+            isfile(job_idx_or_file) || throw(ArgumentError("job_file: $(job_idx_or_file) missing"))
+            readlines(job_idx_or_file)[job_line]
+        end
+        local job_idx_parts = split(replace(unnorm_job_idx, '\\'=>'/'), '/', keepempty=false)
+        isempty(job_idx_parts) && throw(ArgumentError("job_idx is empty"))
+        # each part of job_idx must be a valid part of a filename, on windows, linux and mac.
+        # if job_idx contains references to parent directories, it could be a big issue.
+        # job_idx is also stored in the csv file, so it cannot contain comma or newline.
+        banned_chars = [
+            ',',
+            '\r',
+            '\n',
+            '\\',
+            '/',
+            '\0',
+            '*',
+            '|',
+            ':',
+            '<',
+            '>',
+            '?',
+            '"',
+        ]
+        for part in job_idx_parts
+            @assert !isempty(part)
+            # Check that parts are valid utf8
+            isvalid(part) || throw(ArgumentError("$(collect(part))"))
+            if any(occursin(part), banned_chars)
+                throw(ArgumentError("job_idx part: $(repr(part)) cannot contain $banned_chars"))
+            end
+            endswith(part, '.') && throw(ArgumentError("job_idx part: $(repr(part)) cannot end with ".""))
+            startswith(part, '.') && throw(ArgumentError("job_idx part: $(repr(part)) cannot start with ".""))
+        end
+        local job_seed = tryparse(BigInt, replace(job_idx_parts[end], "_"=>""))
+        isnothing(job_seed) || (job_seed < 0) && throw(ArgumentError("last job_idx part: $(repr(job_idx_parts[end])) must be an positive integer"))
+        join(job_idx_parts, "/"), job_seed
     end
-
-    # job_idx must be a valid part of a filename, on windows, linux and mac.
-    # if job_idx contains path separators, it would be a big issue.
-    # job_idx is also stored in the csv file, so it cannot contain comma or newline.
-    banned_chars = [
-        ',',
-        '\r',
-        '\n',
-        '\\',
-        '/',
-        '\0',
-        '*',
-        '|',
-        ':',
-        '<',
-        '>',
-        '?',
-        '"',
-    ]
-    if any(occursin(job_idx), banned_chars)
-        throw(ArgumentError("job_idx: $(repr(job_idx)) cannot contain $banned_chars"))
-    end
-
-    endswith(job_idx, '.') && throw(ArgumentError("job_idx: $(repr(job_idx)) cannot end with ".""))
 
     if force
-        rm(joinpath(output_dir,"out$job_idx"); force=true, recursive=true)
+        rm(joinpath(output_dir,job_idx); force=true, recursive=true)
     end
 
     # first make the output folder
-    jobout = abspath(mkpath(joinpath(output_dir,"out$job_idx")))
+    jobout = abspath(mkpath(joinpath(output_dir,job_idx)))
 
     # next set up logging
     info_logger = ConsoleLogger(Base.Filesystem.open(joinpath(jobout,"info.log"), LOG_FLAGS, LOG_PERMISSIONS), Logging.Info)
@@ -350,6 +362,8 @@ Comonicon.@cast function run(
             global job_idx = $job_idx
             global jobout = $jobout
             setup_logging(jobout)
+            # set seed on worker
+            Random.seed!($job_seed)
             job_header, state =  UserCode.setup(job_idx)
             open(joinpath(jobout,"header.json"), "w") do io
                 JSON3.pretty(io, job_header; allow_inf = true)
@@ -424,6 +438,7 @@ Comonicon.@cast function run(
             global job_idx = $job_idx
             global jobout = $jobout
             setup_logging(jobout)
+            Random.seed!($job_seed)
             job_header, state =  UserCode.setup(job_idx)
             copy!(Random.default_rng(), Random.Xoshiro(($worker_rng_state)...))
             state = UserCode.load_snapshot(step, StorageTrees.load_dir(joinpath(jobout,"snapshots","snapshot$step.zarr.zip")), state)

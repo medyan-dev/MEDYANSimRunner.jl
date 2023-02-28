@@ -11,7 +11,7 @@ using MEDYANSimRunner
     rm(test_out; force=true, recursive=true)
     mkpath(test_out)
     MEDYANSimRunner.run("examples/good/input/", test_out, "1")
-    out_diff = sprint(MEDYANSimRunner.diff, "examples/good/output-ref/out1", joinpath(test_out,"out1"))
+    out_diff = sprint(MEDYANSimRunner.diff, "examples/good/output-ref/1", joinpath(test_out,"1"))
     if !isempty(out_diff)
         println(out_diff)
         @test false
@@ -22,7 +22,7 @@ end
     mkpath(test_out)
     cp("examples/good partial/output partial", test_out; force=true)
     MEDYANSimRunner.run("examples/good/input/", test_out, "1")
-    out_diff = sprint(MEDYANSimRunner.diff, "examples/good/output-ref/out1", joinpath(test_out,"out1"))
+    out_diff = sprint(MEDYANSimRunner.diff, "examples/good/output-ref/1", joinpath(test_out,"1"))
     if !isempty(out_diff)
         println(out_diff)
         @test false
@@ -34,7 +34,7 @@ end
     mkpath(test_out)
     MEDYANSimRunner.run("examples/missing manifest/input/", test_out, "1")
     # The output should be empty
-    out_diff = sprint(MEDYANSimRunner.diff, mktempdir(), joinpath(test_out,"out1"))
+    out_diff = sprint(MEDYANSimRunner.diff, mktempdir(), joinpath(test_out,"1"))
     if !isempty(out_diff)
         println(out_diff)
         @test false
@@ -47,7 +47,7 @@ end
     MEDYANSimRunner.run("examples/loading timeout/input/", test_out, "1";
         startup_timeout=2.0,
     )
-    out_diff = sprint(MEDYANSimRunner.diff, "examples/loading timeout/output-ref/out1", joinpath(test_out,"out1"))
+    out_diff = sprint(MEDYANSimRunner.diff, "examples/loading timeout/output-ref/1", joinpath(test_out,"1"))
     if !isempty(out_diff)
         println(out_diff)
         @test false
