@@ -18,10 +18,10 @@ Return the header dictionary to be written as the `header.json` file in output.
 Also return the states that get passed on to `loop` and the states that get passed to `save_snapshot` and `load_snapshot`.
 Also set the default random number generator seed.
 
-`job_idx::Int`: The job index starting with job 1. This is used for multi job simulations.
+`job_idx::String`: The job index starting with job 1. This is used for multi job simulations.
 """
-function setup(job_idx::Int)
-    Random.seed!(job_idx)
+function setup(job_idx::String; kwargs...)
+    Random.seed!(parse(Int,job_idx))
     header = OrderedDict([
         "version" => "1.0.0",
         "model_name" => "fibonacci sequence"
@@ -30,23 +30,23 @@ function setup(job_idx::Int)
     header, state
 end
 
-function save_snapshot(step::Int, state)::ZGroup
+function save_snapshot(step::Int, state; kwargs...)::ZGroup
     @info "saving states" state
     group = ZGroup()
     group["states"] = state
     group
 end
 
-function load_snapshot(step::Int, group, state)
+function load_snapshot(step::Int, group, state; kwargs...)
     state .= collect(group["states"])
     state
 end
 
-function done(step::Int, state)
+function done(step::Int, state; kwargs...)
     step > 10, 11
 end
 
-function loop(step::Int, state)
+function loop(step::Int, state; kwargs...)
     a = sum(state) + rand(0:1)
     state[1] = state[2]
     state[2] = a

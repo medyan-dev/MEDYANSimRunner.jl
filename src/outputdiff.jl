@@ -30,16 +30,16 @@ ignoring the nthreads, timestamp, and julia version info.
 function print_list_file_diff(io::IO, list1::AbstractString, list2::AbstractString)
     l1, _ = parse_list_file(list1)
     l2, _ = parse_list_file(list2)
-    if l1.job_idx==0 || l2.job_idx==0
+    if l1.isempty || l2.isempty
         # one list is empty or non existent
-        if l1.job_idx==0 & l2.job_idx!=0
+        if l1.isempty & !(l2.isempty)
             println(io, list1, " file missing or empty")
-        elseif l1.job_idx!=0 & l2.job_idx==0
+        elseif  l2.isempty & !(l1.isempty)
             println(io, list2, " file missing or empty")
         end
     else
         # both exist
-        for fname in (:job_idx, :input_tree_hash, :final_message)
+        for fname in (:isempty, :job_idx, :input_tree_hash, :final_message)
             if getproperty(l1, fname) != getproperty(l2, fname)
                 println(io, list1," ",fname,": ", getproperty(l1, fname))
                 println(io, list2," ",fname,": ", getproperty(l2, fname))

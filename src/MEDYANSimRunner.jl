@@ -88,8 +88,8 @@ const WORKER_STARTUP_CODE = Expr(:toplevel, (quote
     const worker_rng_str = Ref("")
     const worker_rng_copy = copy(Random.default_rng())
     global jobout::String = ""
-    global step = 0
-    global job_idx = 1
+    global step::Int = 0
+    global job_idx::String = ""
     module UserCode
         include("main.jl")
     end
@@ -177,7 +177,7 @@ Start or continue a simulation job.
 
 - `input_dir`: The input directory.
 - `output_dir`: The output directory.
-- `job_idx`: The job index for multi-job simulations, starts at 1.
+- `job_idx`: The job index for multi-job simulations.
 
 # Options
 
@@ -192,15 +192,51 @@ Start or continue a simulation job.
 - `--ignore_error, -i`: ignore previous error when restarting the simulation.
 
 """
-Comonicon.@cast function run(input_dir::AbstractString, output_dir::AbstractString, job_idx::Int;
-        step_timeout::Float64=1000.0,
+Comonicon.@cast function run(
+        input_dir::AbstractString,
+        output_dir::AbstractString,
+        job_idx_or_file::AbstractString,
+        job_line::Int = -1,
+        ;
+        step_timeout::Float64=Inf64,
         max_steps::Int=1_000_000,
-        startup_timeout::Float64=1000.0,
+        startup_timeout::Float64=Inf64,
         max_snapshot_MB::Float64=1E3,
         force::Bool=false,
         ignore_error::Bool=false,
     )::Int
-    job_idx > 0 || throw(ArgumentError("job_idx must be greater than 0"))
+    # get job_idx
+    job_idx::String = if job_line == -1
+        job_idx_or_file
+    else
+        job_line > 0 || throw(ArgumentError("job_line must be greater than 0 if used"))
+        isfile(job_idx_or_file) || throw(ArgumentError("job_file: $(job_idx_or_file) missing"))
+        readlines(job_idx_or_file)[job_line]
+    end
+
+    # job_idx must be a valid part of a filename, on windows, linux and mac.
+    # if job_idx contains path separators, it would be a big issue.
+    # job_idx is also stored in the csv file, so it cannot contain comma or newline.
+    banned_chars = [
+        ',',
+        '\r',
+        '\n',
+        '\\',
+        '/',
+        '\0',
+        '*',
+        '|',
+        ':',
+        '<',
+        '>',
+        '?',
+        '"',
+    ]
+    if any(occursin(job_idx), banned_chars)
+        throw(ArgumentError("job_idx: $(repr(job_idx)) cannot contain $banned_chars"))
+    end
+
+    endswith(job_idx, '.') && throw(ArgumentError("job_idx: $(repr(job_idx)) cannot end with ".""))
 
     if force
         rm(joinpath(output_dir,"out$job_idx"); force=true, recursive=true)
@@ -233,11 +269,14 @@ Comonicon.@cast function run(input_dir::AbstractString, output_dir::AbstractStri
         end
     end
 
+    # This next section is inside a do block, so detect_mult_runners_t can be closed
+    # if an error occurs
     return_code = with_logger(logger) do
 
 
     detect_mult_runners_startup = @async sleep(1.1)
     # wait on detect_mult_runners_startup before writing to list.txt
+    # the actual wait happens after some setup that cannot change list.txt
     
 
     input_dir_valid = is_input_dir_valid(input_dir)
@@ -289,7 +328,7 @@ Comonicon.@cast function run(input_dir::AbstractString, output_dir::AbstractStri
     # if list is empty start new job, otherwise continue the job
     local step::Int
     local worker_versioninfo::String
-    if iszero(list_info.job_idx)
+    if list_info.isempty
         @info "starting new job"
         step = 0
         # delete stuff from dir and remake it

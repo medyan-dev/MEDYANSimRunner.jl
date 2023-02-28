@@ -12,10 +12,10 @@ Return the header dictionary to be written as the `header.json` file in output.
 Also return the states that get passed on to `loop` and the states that get passed to `save_snapshot` and `load_snapshot`.
 Also set the default random number generator seed.
 
-`job_idx::Int`: The job index starting with job 1. This is used for multi job simulations.
+`job_idx::String`: The job index starting with job 1. This is used for multi job simulations.
 """
-function setup(job_idx::Int)
-    Random.seed!(job_idx)
+function setup(job_idx::String; kwargs...)
+    Random.seed!(parse(Int,job_idx))
     header = OrderedDict([
         "version" => "1.0.0",
         "model_name" => "fibonacci sequence"
