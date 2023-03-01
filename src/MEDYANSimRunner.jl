@@ -208,12 +208,12 @@ function normalize_job_idx(job_idx_or_file::AbstractString, job_line::Int = -1):
     for part in job_idx_parts
         @assert !isempty(part)
         # Check that parts are valid utf8
-        isvalid(part) || throw(ArgumentError("$(collect(part))"))
+        isvalid(part) || throw(ArgumentError("invalid utf-8 $(collect(part))"))
         if any(occursin(part), banned_chars)
             throw(ArgumentError("job_idx part: $(repr(part)) cannot contain $banned_chars"))
         end
-        endswith(part, '.') && throw(ArgumentError("job_idx part: $(repr(part)) cannot end with ".""))
-        startswith(part, '.') && throw(ArgumentError("job_idx part: $(repr(part)) cannot start with ".""))
+        endswith(part, '.') && throw(ArgumentError("job_idx part: $(repr(part)) cannot end with \".\""))
+        startswith(part, '.') && throw(ArgumentError("job_idx part: $(repr(part)) cannot start with \".\""))
     end
     job_idx = join(job_idx_parts, "/")
     job_seed = collect(reinterpret(UInt64, sha256(job_idx)))
