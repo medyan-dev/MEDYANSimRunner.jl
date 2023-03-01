@@ -10,6 +10,8 @@ using SHA
 using Distributed
 import Random
 
+const THIS_PACKAGE_VERSION::String = TOML.parsefile(pkgdir(MEDYANSimRunner, "Project.toml"))["version"]
+
 include("timeout.jl")
 include("treehash.jl")
 
@@ -65,6 +67,7 @@ const WORKER_STARTUP_CODE = Expr(:toplevel, (quote
 
     const worker_version_info::String = """
         Julia Version: $VERSION \
+        MEDYANSimRunner Version: $($THIS_PACKAGE_VERSION) \
         OS: $(Sys.iswindows() ? "Windows" : Sys.isapple() ? "macOS" : Sys.KERNEL) ($(Sys.MACHINE)) \
         CPU: $(Sys.cpu_info()[1].model) \
         WORD_SIZE: $(Sys.WORD_SIZE) \
@@ -170,6 +173,54 @@ function println_list(io::IO, str::AbstractString)
     nothing
 end
 
+
+"""
+Return the job_idx string and job_seed, or error if invalid.
+"""
+function normalize_job_idx(job_idx_or_file::AbstractString, job_line::Int = -1)::Tuple{String, Vector{UInt64}}
+    local unnorm_job_idx::String = if job_line == -1
+        job_idx_or_file
+    else
+        job_line > 0 || throw(ArgumentError("job_line must be greater than 0 if used"))
+        isfile(job_idx_or_file) || throw(ArgumentError("job_file: $(job_idx_or_file) missing"))
+        readlines(job_idx_or_file)[job_line]
+    end
+    local job_idx_parts = split(replace(unnorm_job_idx, '\\'=>'/'), '/', keepempty=false)
+    isempty(job_idx_parts) && throw(ArgumentError("job_idx is empty"))
+    # each part of job_idx must be a valid part of a filename, on windows, linux and mac.
+    # if job_idx contains references to parent directories, it could be a big issue.
+    # job_idx is also stored in the csv file, so it cannot contain comma or newline.
+    banned_chars = [
+        ',',
+        '\r',
+        '\n',
+        '\\',
+        '/',
+        '\0',
+        '*',
+        '|',
+        ':',
+        '<',
+        '>',
+        '?',
+        '"',
+    ]
+    for part in job_idx_parts
+        @assert !isempty(part)
+        # Check that parts are valid utf8
+        isvalid(part) || throw(ArgumentError("$(collect(part))"))
+        if any(occursin(part), banned_chars)
+            throw(ArgumentError("job_idx part: $(repr(part)) cannot contain $banned_chars"))
+        end
+        endswith(part, '.') && throw(ArgumentError("job_idx part: $(repr(part)) cannot end with ".""))
+        startswith(part, '.') && throw(ArgumentError("job_idx part: $(repr(part)) cannot start with ".""))
+    end
+    job_idx = join(job_idx_parts, "/")
+    job_seed = collect(reinterpret(UInt64,sha256(job_idx)))
+    job_idx, job_seed
+end
+
+
 """
 Start or continue a simulation job.
 
@@ -206,49 +257,7 @@ Comonicon.@cast function run(
         force::Bool=false,
         ignore_error::Bool=false,
     )::Int
-    # get job_idx
-    job_idx::String, job_seed::BigInt = let job_idx_or_file = job_idx_or_file, job_line = job_line
-        local unnorm_job_idx::String = if job_line == -1
-            job_idx_or_file
-        else
-            job_line > 0 || throw(ArgumentError("job_line must be greater than 0 if used"))
-            isfile(job_idx_or_file) || throw(ArgumentError("job_file: $(job_idx_or_file) missing"))
-            readlines(job_idx_or_file)[job_line]
-        end
-        local job_idx_parts = split(replace(unnorm_job_idx, '\\'=>'/'), '/', keepempty=false)
-        isempty(job_idx_parts) && throw(ArgumentError("job_idx is empty"))
-        # each part of job_idx must be a valid part of a filename, on windows, linux and mac.
-        # if job_idx contains references to parent directories, it could be a big issue.
-        # job_idx is also stored in the csv file, so it cannot contain comma or newline.
-        banned_chars = [
-            ',',
-            '\r',
-            '\n',
-            '\\',
-            '/',
-            '\0',
-            '*',
-            '|',
-            ':',
-            '<',
-            '>',
-            '?',
-            '"',
-        ]
-        for part in job_idx_parts
-            @assert !isempty(part)
-            # Check that parts are valid utf8
-            isvalid(part) || throw(ArgumentError("$(collect(part))"))
-            if any(occursin(part), banned_chars)
-                throw(ArgumentError("job_idx part: $(repr(part)) cannot contain $banned_chars"))
-            end
-            endswith(part, '.') && throw(ArgumentError("job_idx part: $(repr(part)) cannot end with ".""))
-            startswith(part, '.') && throw(ArgumentError("job_idx part: $(repr(part)) cannot start with ".""))
-        end
-        local job_seed = tryparse(BigInt, replace(job_idx_parts[end], "_"=>""))
-        isnothing(job_seed) || (job_seed < 0) && throw(ArgumentError("last job_idx part: $(repr(job_idx_parts[end])) must be an positive integer"))
-        join(job_idx_parts, "/"), job_seed
-    end
+    job_idx::String, job_seed::Vector{UInt64} = normalize_job_idx(job_idx_or_file, job_line)        
 
     if force
         rm(joinpath(output_dir,job_idx); force=true, recursive=true)
