@@ -30,23 +30,31 @@ Run the following in the root of this project.
 cd test/examples/good
 medyansimrunner run input output 1
 ```
-This will run the example simulation in `test/examples/good/input` with job index `"1"` and seed 1 and store the output in `test/examples/good/output/1`.
+This will run the example simulation in `test/examples/good/input` with job index `"1"` and store the output in `test/examples/good/output/1`.
 
 The `job_idx` string gets passed to the `setup` function in `main.jl`.
 
-The part of `job_idx` after the last "/" is parsed as a positive `BigInt` and set as the default RNG seed right before `setup` is called.
+The `job_idx` is hashed and set as the default RNG seed right before `setup` is called.
+
+Any backslash in the job index will be replaced with a "/".
+
+The job index must be valid utf-8.
+
+Job index must not be empty.
 
 Each part of job index when split by "/" must not contain any of the following characters:
 
 ```julia
-[ ',', '\r', '\n', '\\', '\0', '*', '|', ':', '<', '>', '?', '"',]
+[ ',', '\r', '\n', '\0', '*', '|', ':', '<', '>', '?', '"',]
 ```
 
 Each part must not end or start in a period or dot.
 
 The output directory will be created if it doesn't already exist.
 
-To run a job with a index in the third line of file `jobnames.txt` use:
+The job index string can be loaded from a line of a file.
+
+For example, to run a job with a index in the third line of file `jobnames.txt` use:
 
 ```sh
 medyansimrunner run input output jobnames.txt 3
@@ -86,8 +94,6 @@ Also return the state that gets passed on to `loop` and the state that gets pass
 
 `job_idx::String`: The job index. This is used for multi job simulations.
 
-The part of `job_idx` after the last "/" is parsed as a positive `BigInt` and set as the default RNG seed right before `setup` is called.
-
 #### `save_snapshot(step::Int, state; kwargs...)::StorageTrees.ZGroup`
 Return the state of the system as a `StorageTrees.ZGroup`
 This function should not mutate `state`
@@ -121,7 +127,8 @@ These must contain StorageTrees, JSON3, and LoggingExtras, because these are req
 ```
 activate and instantiate the environment
 include("main.jl")
-create output directory if it doesn't exist
+create output directory based on job_idx if it doesn't exist
+Random.seed!(collect(reinterpret(UInt64, sha256(job_idx))))
 job_header, state =  setup(job_idx)
 save job_header
 step = 0

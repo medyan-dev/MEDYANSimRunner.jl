@@ -216,7 +216,7 @@ function normalize_job_idx(job_idx_or_file::AbstractString, job_line::Int = -1):
         startswith(part, '.') && throw(ArgumentError("job_idx part: $(repr(part)) cannot start with ".""))
     end
     job_idx = join(job_idx_parts, "/")
-    job_seed = collect(reinterpret(UInt64,sha256(job_idx)))
+    job_seed = collect(reinterpret(UInt64, sha256(job_idx)))
     job_idx, job_seed
 end
 
