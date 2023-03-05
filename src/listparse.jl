@@ -27,7 +27,8 @@ end
 Represents a parsed list.txt file.
 """
 Base.@kwdef struct ListFileV1
-    job_idx::Int = 0
+    isempty::Bool = true
+    job_idx::String = ""
     input_tree_hash::Vector{UInt8} = []
     header_sha256::Vector{UInt8} = []
     snapshot_infos::Vector{SnapshotInfoV1} = []
@@ -79,7 +80,7 @@ function parse_list_file(listpath::AbstractString; ignore_error::Bool=false)
     if firstlineparts[2][1] != "job_idx"
         error("expected \"job_idx\" got $(firstlineparts[2][1])")
     end
-    job_idx = parse(Int, firstlineparts[2][2])
+    job_idx = join(firstlineparts[2][2:end]," = ")
     if firstlineparts[3][1] != "input_tree_hash"
         error("expected \"input_tree_hash\" got $(firstlineparts[3][1])")
     end
@@ -96,6 +97,7 @@ function parse_list_file(listpath::AbstractString; ignore_error::Bool=false)
     # error before header file written
     if length(lines) == 2 && !isempty(final_message)
         return ListFileV1(;
+            isempty=false,
             job_idx,
             input_tree_hash,
             final_message,
@@ -123,6 +125,7 @@ function parse_list_file(listpath::AbstractString; ignore_error::Bool=false)
         parse_snapshot_info_v1(lines[i+2])
     end
     return ListFileV1(;
+        isempty=false,
         job_idx,
         input_tree_hash,
         header_sha256,

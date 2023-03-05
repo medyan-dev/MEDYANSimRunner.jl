@@ -27,20 +27,49 @@ To see the help.
 ## Example
 Run the following in the root of this project.
 ```sh
-mkdir test/examples/good/output
-medyansimrunner run test/examples/good/input test/examples/good/output 1
+cd test/examples/good
+medyansimrunner run input output 1
 ```
-This will run the example simulation in `test/examples/good/input` with job index 1 and store the output in `test/examples/good/output/out1`
+This will run the example simulation in `test/examples/good/input` with job index `"1"` and store the output in `test/examples/good/output/1`.
+
+The `job_idx` string gets passed to the `setup` function in `main.jl`.
+
+The `job_idx` is hashed and set as the default RNG seed right before `setup` is called.
+
+Any backslash in the job index will be replaced with a "/".
+
+The job index must be valid utf-8.
+
+Job index must not be empty.
+
+Each part of job index when split by "/" must not contain any of the following characters:
+
+```julia
+[ ',', '\r', '\n', '\0', '*', '|', ':', '<', '>', '?', '"',]
+```
+
+Each part must not end or start in a period or dot.
+
+The output directory will be created if it doesn't already exist.
+
+The job index string can be loaded from a line of a file.
+
+For example, to run a job with a index in the third line of file `jobnames.txt` use:
+
+```sh
+medyansimrunner run input output jobnames.txt 3
+```
+
 
 ## input kwargs
 
-- `step_timeout`: the maximum amount of time in seconds each step is allowed to take before the job is killed.
+- `step-timeout`: the maximum amount of time in seconds each step is allowed to take before the job is killed, defaults to infinity.
 
-- `max_steps`: the maximum number of steps a job is allowed to take before the job is killed.
+- `max-steps`: the maximum number of steps a job is allowed to take before the job is killed.
 
-- `startup_timeout`: the maximum amount of time in seconds to load everything and run the first loop.
+- `startup-timeout`: the maximum amount of time in seconds to load everything and run the first loop, defaults to infinity.
 
-- `max_snapshot_MB`: the maximum amount of hard drive space each snapshot is allowed to use in megabytes.
+- `max-snapshot-MB`: the maximum amount of hard drive space each snapshot is allowed to use in megabytes.
 
 ## `input` directory
 
@@ -57,34 +86,33 @@ These functions can modify any input state variables, but in general should retu
 These functions can also use the default random number generator, this will automatically saved and loaded.
 
 #### Standard input parameters.
- - `step::Int`: starts out at 0 after setup and is auto incremented right after every loop.
+ - `step::Int`: starts out at 0 after setup and is auto incremented right after every `loop`.
 
-#### `setup(job_idx::Int) -> header_dict, state`
+#### `setup(job_idx::String; kwargs...) -> header_dict, state`
 Return the header dictionary to be written as the `header.json` file in output.
 Also return the state that gets passed on to `loop` and the state that gets passed to `save_snapshot` and `load_snapshot`.
-Also set the default random number generator seed.
 
-`job_idx::Int`: The job index starting with job 1. This is used for multi job simulations.
+`job_idx::String`: The job index. This is used for multi job simulations.
 
-#### `save_snapshot(step::Int, state)::StorageTrees.ZGroup`
+#### `save_snapshot(step::Int, state; kwargs...)::StorageTrees.ZGroup`
 Return the state of the system as a `StorageTrees.ZGroup`
 This function should not mutate `state`
 
-#### `load_snapshot(step::Int, group::StorageTrees.ZGroup, state) -> state`
+#### `load_snapshot(step::Int, group::StorageTrees.ZGroup, state; kwargs...) -> state`
 Load the state saved by `save_snapshot`
 This function can mutate `state`.
 `state` may be the state returned from `setup` or the `state` returned by `loop`.
 This function should return the same output if `state` is the state returned by `loop` or the 
 state returned by `setup`.
 
-#### `done(step::Int, state) -> done::Bool, expected_final_step::Int`
+#### `done(step::Int, state; kwargs...) -> done::Bool, expected_final_step::Int`
 Return true if the simulation is done, or false if `loop` should be called again.
 
 Also return the expected value of step when done will first be true, used for displaying the simulation progress.
 
 This function should not mutate `state`
 
-#### `loop(step::Int, state) -> state`
+#### `loop(step::Int, state; kwargs...) -> state`
 Return the state that gets passed to `save_snapshot`
 
 
@@ -99,7 +127,8 @@ These must contain StorageTrees, JSON3, and LoggingExtras, because these are req
 ```
 activate and instantiate the environment
 include("main.jl")
-create output directory if it doesn't exist
+create output directory based on job_idx if it doesn't exist
+Random.seed!(collect(reinterpret(UInt64, sha256(job_idx))))
 job_header, state =  setup(job_idx)
 save job_header
 step = 0
@@ -120,7 +149,7 @@ end
 
 ## `output` directory
 
-The output directory has an `out$job_idx` subdirectory for parallel job job_idx's output.
+The output directory has an `out$job_idx` subdirectory for job `job_idx`'s output.
 
 Each out subdirectory has the following files.
 
