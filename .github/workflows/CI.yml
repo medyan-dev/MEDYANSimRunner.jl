@@ -36,12 +36,6 @@ jobs:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
       - uses: julia-actions/cache@v1
-      - name: Add MEDYANRegistry
-        run: |
-          julia -e '
-            using Pkg
-            Pkg.Registry.add(RegistrySpec(url = "https://github.com/JuliaRegistries/General"))
-            Pkg.Registry.add(RegistrySpec(url = "https://github.com/medyan-dev/MEDYANRegistry.git"))'
       - name: Develop packages
         run: |
           julia --project=test -e '
