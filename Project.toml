@@ -1,7 +1,7 @@
 name = "MEDYANSimRunner"
 uuid = "b58a3b99-22e3-44d1-b5ea-258f082a6fe8"
 authors = ["nhz2 <nhz2@cornell.edu>"]
-version = "0.2.0"
+version = "0.3.0"
 
 [deps]
 Comonicon = "863f3e99-da2a-4334-8734-de3dacbe5542"
@@ -22,3 +22,4 @@ Comonicon = "1"
 DeepDiffs = "1"
 JSON3 = "1"
 LoggingExtras = "1"
+SmallZarrGroups = "0.5"
