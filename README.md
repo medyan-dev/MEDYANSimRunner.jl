@@ -94,11 +94,11 @@ Also return the state that gets passed on to `loop` and the state that gets pass
 
 `job_idx::String`: The job index. This is used for multi job simulations.
 
-#### `save_snapshot(step::Int, state; kwargs...)::StorageTrees.ZGroup`
-Return the state of the system as a `StorageTrees.ZGroup`
+#### `save_snapshot(step::Int, state; kwargs...)::SmallZarrGroups.ZGroup`
+Return the state of the system as a `SmallZarrGroups.ZGroup`
 This function should not mutate `state`
 
-#### `load_snapshot(step::Int, group::StorageTrees.ZGroup, state; kwargs...) -> state`
+#### `load_snapshot(step::Int, group::SmallZarrGroups.ZGroup, state; kwargs...) -> state`
 Load the state saved by `save_snapshot`
 This function can mutate `state`.
 `state` may be the state returned from `setup` or the `state` returned by `loop`.
@@ -120,7 +120,7 @@ Return the state that gets passed to `save_snapshot`
 ### `Manifest.toml` and `Project.toml`
 
 These contain the julia environment used when running the simulation. 
-These must contain StorageTrees, JSON3, and LoggingExtras, because these are required for saving data.
+These must contain SmallZarrGroups, JSON3, and LoggingExtras, because these are required for saving data.
 
 ### Main loop pseudo code
 
@@ -132,13 +132,13 @@ Random.seed!(collect(reinterpret(UInt64, sha256(job_idx))))
 job_header, state =  setup(job_idx)
 save job_header
 step = 0
-StorageTrees.save_dir(snapshot_zip_file, save_snapshot(step, state))
-state = load_snapshot(step, StorageTrees.load_dir(snapshot_zip_file), state)
+SmallZarrGroups.save_dir(snapshot_zip_file, save_snapshot(step, state))
+state = load_snapshot(step, SmallZarrGroups.load_dir(snapshot_zip_file), state)
 while true
     state = loop(step, state)
     step = step + 1
-    StorageTrees.save_dir(snapshot_zip_file, save_snapshot(step, state))
-    state = load_snapshot(step, StorageTrees.load_dir(snapshot_zip_file), state)
+    SmallZarrGroups.save_dir(snapshot_zip_file, save_snapshot(step, state))
+    state = load_snapshot(step, SmallZarrGroups.load_dir(snapshot_zip_file), state)
     if done(step::Int, state)[1]
         break
     end

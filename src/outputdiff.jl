@@ -1,7 +1,7 @@
 # functions to show the difference between two job outputs
 
 import DeepDiffs
-using StorageTrees
+using SmallZarrGroups
 import JSON3
 
 
@@ -133,9 +133,9 @@ function diff(io::IO, jobout1::AbstractString, jobout2::AbstractString)
         for snapshotname in (snapshots1 ∩ snapshots2)
             full_name1 = joinpath(jobout1, "snapshots", snapshotname)
             full_name2 = joinpath(jobout2, "snapshots", snapshotname)
-            group1 = StorageTrees.load_dir(full_name1)
-            group2 = StorageTrees.load_dir(full_name2)
-            StorageTrees.print_diff(io, group1, group2, full_name1, full_name2, "", startswith("#"))
+            group1 = SmallZarrGroups.load_dir(full_name1)
+            group2 = SmallZarrGroups.load_dir(full_name2)
+            SmallZarrGroups.print_diff(io, group1, group2, full_name1, full_name2, "", startswith("#"))
         end
     elseif snapshot1dir_exists && !snapshot2dir_exists
         println(io, snapshot2dir, " dir missing or empty")

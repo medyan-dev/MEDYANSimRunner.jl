@@ -1,7 +1,7 @@
 name = "MEDYANSimRunner"
 uuid = "b58a3b99-22e3-44d1-b5ea-258f082a6fe8"
 authors = ["nhz2 <nhz2@cornell.edu>"]
-version = "0.2.0"
+version = "0.3.0"
 
 [deps]
 Comonicon = "863f3e99-da2a-4334-8734-de3dacbe5542"
@@ -14,7 +14,7 @@ Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
 LoggingExtras = "e6f89c97-d47a-5376-807f-9c37f3926c36"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 SHA = "ea8e919c-243c-51af-8825-aaa63cd721ce"
-StorageTrees = "d423b6e5-1c84-4ae2-8d2d-b903aee15ac7"
+SmallZarrGroups = "d423b6e5-1c84-4ae2-8d2d-b903aee15ac7"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 
 [compat]
@@ -22,4 +22,4 @@ Comonicon = "1"
 DeepDiffs = "1"
 JSON3 = "1"
 LoggingExtras = "1"
-StorageTrees = "0.3"
+SmallZarrGroups = "0.5"
