@@ -59,7 +59,7 @@ const WORKER_STARTUP_CODE = Expr(:toplevel, (quote
     import LoggingExtras
     import Logging
     import JSON3
-    import StorageTrees
+    import SmallZarrGroups
     import Random
     worker_timestamp_logger(logger) = LoggingExtras.TransformerLogger(logger) do log
         merge(log, (; message = "$(Dates.format(Dates.now(), $DATE_FORMAT)) $(log.message)"))
@@ -99,9 +99,9 @@ const WORKER_STARTUP_CODE = Expr(:toplevel, (quote
 
     function save_load_snapshot_dir(step, jobout, worker_rng_str, state)
         snapshot_path = joinpath(jobout,"snapshots","snapshot$step.zarr.zip")
-        StorageTrees.save_dir(snapshot_path, UserCode.save_snapshot(step, state))
+        SmallZarrGroups.save_dir(snapshot_path, UserCode.save_snapshot(step, state))
         worker_rng_str[] = worker_rng_2_str()
-        UserCode.load_snapshot(step, StorageTrees.load_dir(snapshot_path), state)
+        UserCode.load_snapshot(step, SmallZarrGroups.load_dir(snapshot_path), state)
     end
 
     function setup_logging(jobout)
@@ -450,7 +450,7 @@ Comonicon.@cast function run(
             Random.seed!($job_seed)
             job_header, state =  UserCode.setup(job_idx)
             copy!(Random.default_rng(), Random.Xoshiro(($worker_rng_state)...))
-            state = UserCode.load_snapshot(step, StorageTrees.load_dir(joinpath(jobout,"snapshots","snapshot$step.zarr.zip")), state)
+            state = UserCode.load_snapshot(step, SmallZarrGroups.load_dir(joinpath(jobout,"snapshots","snapshot$step.zarr.zip")), state)
             isdone::Bool, expected_final_step::Int64 = UserCode.done(step, state)
             copy!(worker_rng_copy, Random.default_rng())
             isdone, expected_final_step, worker_version_info
