@@ -40,8 +40,8 @@ jobs:
         run: |
           julia -e '
             using Pkg
-            Pkg.Registry.add(RegistrySpec(url = "https://github.com/medyan-dev/MEDYANRegistry.git"))
-            Pkg.Registry.add(RegistrySpec(url = "https://github.com/JuliaRegistries/General"))'
+            Pkg.Registry.add(RegistrySpec(url = "https://github.com/JuliaRegistries/General"))
+            Pkg.Registry.add(RegistrySpec(url = "https://github.com/medyan-dev/MEDYANRegistry.git"))'
       - name: Develop packages
         run: |
           julia --project=test -e '
