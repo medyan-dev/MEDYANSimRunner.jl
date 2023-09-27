@@ -9,28 +9,28 @@ using MEDYANSimRunner
         ) == MEDYANSimRunner.CLIOptions(;
             continue_sim=false,
             batch=-1,
-            outdir=".",
+            out_dir=".",
         )
     @test MEDYANSimRunner.parse_cli_args(
             String["--continue"], ["job1", "job2"]
         ) == MEDYANSimRunner.CLIOptions(;
             continue_sim=true,
             batch=-1,
-            outdir=".",
+            out_dir=".",
         )
     @test MEDYANSimRunner.parse_cli_args(
             String["--out=/home/nathan/sim1"], ["job1", "job2"]
         ) == MEDYANSimRunner.CLIOptions(;
             continue_sim=false,
             batch=-1,
-            outdir="/home/nathan/sim1",
+            out_dir="/home/nathan/sim1",
         )
     @test MEDYANSimRunner.parse_cli_args(
             String["--batch=-1"], ["job1", "job2"]
         ) == MEDYANSimRunner.CLIOptions(;
             continue_sim=false,
             batch=-1,
-            outdir=".",
+            out_dir=".",
         )
     @test (@test_logs (:error, "--batch must be -1 or in 1:2, instead got 3") MEDYANSimRunner.parse_cli_args(
             String["--batch=3"], ["job1", "job2"]
@@ -43,6 +43,6 @@ using MEDYANSimRunner
         )) == MEDYANSimRunner.CLIOptions(;
             continue_sim=false,
             batch=-1,
-            outdir=".",
+            out_dir=".",
         )
 end

@@ -1,23 +1,35 @@
 import InteractiveUtils
-using LoggingExtras
+import LoggingExtras
+import JSON3
 using Logging
-using Dates
-using SHA
+import Dates
+using SHA: sha256
 using ArgCheck
+using SmallZarrGroups
 import Random
 
 const THIS_PACKAGE_VERSION::String = string(pkgversion(@__MODULE__))
 
-const DATE_FORMAT = dateformat"yyyy-mm-dd HH:MM:SS"
+const VERSION_INFO::String = """
+    Julia Version: $VERSION
+    MEDYANSimRunner Version: $(THIS_PACKAGE_VERSION)
+    OS: $(Sys.iswindows() ? "Windows" : Sys.isapple() ? "macOS" : Sys.KERNEL) ($(Sys.MACHINE))
+    CPU: $(Sys.cpu_info()[1].model)
+    WORD_SIZE: $(Sys.WORD_SIZE)
+    LLVM: libLLVM-$(Base.libllvm_version) ($(Sys.JIT) $(Sys.CPU_NAME))
+    Threads: $(Threads.nthreads()) on $(Sys.CPU_THREADS) virtual cores
+    """
+
+const DATE_FORMAT = Dates.dateformat"yyyy-mm-ddTHH:MM:SS"
 
 # amount to pad step count by with lpad
-const STEP_PAD = 7
+const STEP_PAD = 10
 
 
 
 
 """
-    run_sim(ARGS; setup, loop, loadsnapshot, savesnapshot, done)
+    run_sim(ARGS; setup, loop, load_snapshot, save_snapshot, done)
 
 This function should be called at the end of a script to run a simulation.
 It takes keyword arguments:
@@ -65,72 +77,169 @@ function run_sim(cli_args;
         kwargs...
     )
     @argcheck !isempty(jobs)
-    options = parse_cli_args(cli_args, jobs)
-    if isnothing(options)
+    @argcheck allunique(jobs)
+    maybe_options = parse_cli_args(cli_args, jobs)
+    if isnothing(maybe_options)
         return
-    elseif options.batch == -1
+    end
+    options::CLIOptions = something(maybe_options)
+    if options.batch == -1
         # TODO run all jobs in parallel
+        for job in jobs
+            if options.continue_sim
+                continue_job(options.out_dir, job;
+                    setup,
+                    loop,
+                    save_snapshot,
+                    load_snapshot,
+                    done,
+                )
+            else
+                start_job(options.out_dir, job;
+                    setup,
+                    loop,
+                    save_snapshot,
+                    load_snapshot,
+                    done,
+                )
+            end
+        end
     else
-        run_batch()
+        job = jobs[options.batch]
+        if options.continue_sim
+            continue_job(options.out_dir, job;
+                setup,
+                loop,
+                save_snapshot,
+                load_snapshot,
+                done,
+            )
+        else
+            start_job(options.out_dir, job;
+                setup,
+                loop,
+                save_snapshot,
+                load_snapshot,
+                done,
+            )
+        end
     end
-
-
+    return
 end
 
-@kwdef struct CLIOptions
-    continue_sim::Bool
-    batch::Int
-    outdir::String
-end
 
-Base.:(==)(a::CLIOptions, b::CLIOptions) = all((isequal(getfield(a,k), getfield(b,k)) for k in 1:fieldcount(typeof(a))))
-
-
-
-function parse_cli_args(cli_args, jobs::Vector{String})::Union{CLIOptions, Nothing}
-    if any(startswith("--h"), cli_args) || any(startswith("-h"), cli_args)
-        @info "TODO print help message"
-        return
-    end
-
-    continue_sim = parse_flag!(cli_args, "--continue")
-
-    outdir = something(parse_option!(cli_args, "--out"), ".")
-
-    batch_str = something(parse_option!(cli_args, "--batch"), "-1")
-    batch = tryparse(Int, batch_str)
-    batch_range = 1:length(jobs)
-    if isnothing(batch)
-        @error "--batch must be a integer, instead got $(repr(batch_str))"
-        return
-    end
-    if !(batch == -1 || batch ∈ batch_range)
-        @error "--batch must be -1 or in $(batch_range), instead got $(batch)"
-        return
-    end
-
-    unused_args = cli_args
-    if !isempty(cli_args)
-        @warn "not all ARGS used" unused_args
-    end
-
-    return CLIOptions(;
-        continue_sim,
-        batch,
-        outdir,
+function start_job(out_dir, job::String;
+        setup,
+        loop,
+        save_snapshot,
+        load_snapshot,
+        done,
     )
+    # first set up logging
+    job_out = mkpath(joinpath(abspath(out_dir), job))
+    snaps = mkpath(joinpath(job_out, "snapshots"))
+    all_logs = mkpath(joinpath(job_out, "logs"))
+    logs = make_new_version(all_logs)
+    # now logs is a fresh directory to save logs to for this run.
+    logger = LoggingExtras.TeeLogger(
+        global_logger(),
+        timestamp_logger(joinpath(logs, "info.log"), Logging.Info),
+        timestamp_logger(joinpath(logs, "warn.log"), Logging.Warn),
+        timestamp_logger(joinpath(logs, "error.log"), Logging.Error),
+    )
+    list_file = open(joinpath(logs, "list.txt"); write=true)
+    with_logger(logger) do
+        @info "Starting new job."
+        @info VERSION_INFO
+        Random.seed!(collect(reinterpret(UInt64, sha256(job))))
+        job_header, state = setup(job_idx)
+        @info "setup complete."
+        header_str = sprint() do io
+            JSON3.pretty(io, job_header; allow_inf = true)
+        end
+        header_sha256 = bytes2hex(sha256(header_str))
+        write(joinpath(logs, "header.json"), header_str)
+        println_list(list_file,
+            "version = 2 | job = $job | header_sha256 = $header_sha256"
+        )
+        local step::Int = 0
+        snapshot_data = zip_group(save_snapshot(step, state))
+        snapshot_rng = rng_2_str()
+        state = load_snapshot(step, unzip_group(snapshot_data), state)
+        snapshot_sha256 = bytes2hex(sha256(snapshot_data))
+        println_list(list_file, 
+            "$(Dates.format(now(),DATE_FORMAT)) | $(string(step, pad=STEP_PAD)) | $(snapshot_rng) | $(snapshot_sha256)"
+        )
+        write(joinpath(snaps, string(step, pad=STEP_PAD)*"_"*snapshot_sha256*".zarr.zip"), snapshot_data)
+        @info "simulation started"
+        while true
+            state = loop(step, state)
+            step += 1
+            snapshot_data = zip_group(save_snapshot(step, state))
+            snapshot_rng = rng_2_str()
+            state = load_snapshot(step, unzip_group(snapshot_data), state)
+            snapshot_sha256 = bytes2hex(sha256(snapshot_data))
+            println_list(list_file, 
+                "$(Dates.format(now(),DATE_FORMAT)) | $(string(step, pad=STEP_PAD)) | $(snapshot_rng) | $(snapshot_sha256)"
+            )
+            write(joinpath(snaps, string(step, pad=STEP_PAD)*"_"*snapshot_sha256*".zarr.zip"), snapshot_data)
+            isdone::Bool, expected_final_step::Int64 = done(step::Int, state)
+            @info "step $step of $expected_final_step done"
+            if isdone
+                println_list(list_file, "Done")
+                @info "simulation completed"
+                break
+            end
+        end
+    end
 end
 
-function parse_flag!(args, flag)::Bool
-    r = flag ∈ args
-    filter!(!=(flag), args)
-    r
+
+
+function continue_job(out_dir, job;
+        setup,
+        loop,
+        save_snapshot,
+        load_snapshot,
+        done,
+    )
+    error("continuing a job is not implemented yet")
+
 end
 
-function parse_option!(args, option)::Union{Nothing, String}
-    i = findlast(startswith(option*"="), args)
-    isnothing(i) && return
-    v = split(args[something(i)], '='; limit=2)[2]
-    filter!(!startswith(option*"="), args)
-    String(v)
+
+
+"""
+Print a `str` and add " | (hex sha256 of the line)\n", and then flush
+"""
+function println_list(io::IO, str::AbstractString)
+    println(io,str, " | ", bytes2hex(sha256(str)))
+    flush(io)
+    nothing
+end
+
+
+
+function zip_group(g::ZGroup)::Vector{UInt8}
+    io = IOBuffer()
+    writer = SmallZarrGroups.ZarrZipWriter(io)
+    SmallZarrGroups.save_dir(writer, g)
+    SmallZarrGroups.closewriter(writer)
+    take!(io)
+end
+
+function unzip_group(data::Vector{UInt8})::ZGroup
+    SmallZarrGroups.load_dir(SmallZarrGroups.ZarrZipReader(data))
+end
+
+
+function timestamp_logger(file, level) 
+    LoggingExtras.MinLevelLogger(
+        LoggingExtras.TransformerLogger(
+            LoggingExtras.FileLogger(file; append=true),
+        ) do log
+            merge(log, (; message = "$(Dates.format(Dates.now(), DATE_FORMAT)) $(log.message)"))
+        end,
+        level,
+    )
 end
