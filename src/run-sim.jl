@@ -8,9 +8,10 @@ using ArgCheck
 using SmallZarrGroups
 import Random
 
-const THIS_PACKAGE_VERSION::String = string(pkgversion(@__MODULE__))
 
-const VERSION_INFO::String = """
+
+function get_version_string()
+    """
     Julia Version: $VERSION
     MEDYANSimRunner Version: $(THIS_PACKAGE_VERSION)
     OS: $(Sys.iswindows() ? "Windows" : Sys.isapple() ? "macOS" : Sys.KERNEL) ($(Sys.MACHINE))
@@ -19,14 +20,7 @@ const VERSION_INFO::String = """
     LLVM: libLLVM-$(Base.libllvm_version) ($(Sys.JIT) $(Sys.CPU_NAME))
     Threads: $(Threads.nthreads()) on $(Sys.CPU_THREADS) virtual cores
     """
-
-const DATE_FORMAT = Dates.dateformat"yyyy-mm-ddTHH:MM:SS"
-
-# amount to pad step count by with lpad
-const STEP_PAD = 10
-
-
-
+end
 
 """
     run_sim(ARGS; setup, loop, load_snapshot, save_snapshot, done)
@@ -150,7 +144,7 @@ function start_job(out_dir, job::String;
     list_file = open(joinpath(logs, "list.txt"); write=true)
     with_logger(logger) do
         @info "Starting new job."
-        @info VERSION_INFO
+        @info get_version_string()
         Random.seed!(collect(reinterpret(UInt64, sha256(job))))
         job_header, state = setup(job_idx)
         @info "setup complete."
