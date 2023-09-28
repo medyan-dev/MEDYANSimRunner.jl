@@ -17,7 +17,7 @@ end
 """
 Return all found versions in a directory sorted with newest last.
 """
-function get_versions(dname)::Vector{VersionDir}
+function get_versions(dname::String)::Vector{VersionDir}
     used_names = filter(readdir(dname)) do subname
         local cu = codeunits(String(subname))
         length(cu) == 33 || return false
@@ -39,8 +39,8 @@ end
 Return the path to a new versioned directory in dname.
 Also sets logging to the new directory.
 """
-function make_new_version(dname)
-    versions = get_versions(dname)
+function make_new_version(dname::String)
+    versions = get_versions(dname::String)
     i = if isempty(versions)
         UInt64(1)
     else
@@ -54,13 +54,13 @@ function make_new_version(dname)
 end
 
 """
-Write a snapshot is it doesn't already exist.
+Write a snapshot if it doesn't already exist.
 Return the name of the file written.
-If a snapshot file exists it must have its SHA256 hash in its name.
+If a snapshot file exists it must have its SHA256 hash and step in its name.
 The default write first truncates the file and then writes, so if julia crashes
 the file will be empty, corrupting the snapshot directory.
 """
-function write_hashfile(
+function write_snapfile(
         dname,
         step::Int,
         data::AbstractVector{UInt8},
@@ -70,39 +70,32 @@ function write_hashfile(
     sha256_str = bytes2hex(sha256(data))
     file_name = string(step, pad=STEP_PAD)*"_"*sha256_str*postfix
     file_path = joinpath(dname, file_name)
-    if ispath(file_path)
-        isfile(file_path) || error("$(repr(file_path)) is corrupted")
+    if isfile(file_path)
         existing_hash = bytes2hex(open(sha256, file_path))
         if sha256_str == existing_hash
             # file exists and is correct, return
             return file_name
-        else
-            error("$(repr(file_path)) is corrupted")
         end
-    else
-        # safely create the new file.
-        mktemp(dname) do temp_path, temp_out
-            nb = write(temp_out, data)
-            if nb != length(data)
-                error("short write of $(repr(file_name)) data")
-            end
-            close(temp_out)
-            # mv may fail if the dest exists
-            # this could happen if another process creates the file
-            # in the intermediate time.
-            # for now just error out, because something weird is probably happening.
-            try
-                mv(temp_path, file_path; force=false)
-            catch
-                isfile(file_path) || error("$(repr(file_path)) is corrupted")
+    end
+    # safely create the new file.
+    mktemp(dname) do temp_path, temp_out
+        nb = write(temp_out, data)
+        if nb != length(data)
+            error("short write of $(repr(file_name)) data")
+        end
+        close(temp_out)
+        err = ccall(:jl_fs_rename, Int32, (Cstring, Cstring), temp_path, file_path)
+        # on error, check if file was made by another process, and is still valid.
+        if err < 0
+            if isfile(file_path)
                 existing_hash = bytes2hex(open(sha256, file_path))
                 if sha256_str == existing_hash
                     # file exists and is correct, return
                     return file_name
-                else
-                    error("$(repr(file_path)) is corrupted")
                 end
             end
+            # otherwise error
+            error("$(repr(file_path)) is corrupted")
         end
     end
 end

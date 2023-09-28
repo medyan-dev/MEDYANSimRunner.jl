@@ -160,11 +160,10 @@ function start_job(out_dir, job::String;
         snapshot_data = zip_group(save_snapshot(step, state))
         snapshot_rng = rng_2_str()
         state = load_snapshot(step, unzip_group(snapshot_data), state)
-        snapshot_sha256 = bytes2hex(sha256(snapshot_data))
+        snap_name = write_snapfile(snaps, step, snapshot_data, ".zip")
         println_list(list_file, 
-            "$(Dates.format(now(),DATE_FORMAT)) | $(string(step, pad=STEP_PAD)) | $(snapshot_rng) | $(snapshot_sha256)"
+            "$(Dates.format(now(),DATE_FORMAT)) | $(snap_name) | $(snapshot_rng)"
         )
-        write(joinpath(snaps, string(step, pad=STEP_PAD)*"_"*snapshot_sha256*".zarr.zip"), snapshot_data)
         @info "simulation started"
         while true
             state = loop(step, state)
@@ -172,11 +171,10 @@ function start_job(out_dir, job::String;
             snapshot_data = zip_group(save_snapshot(step, state))
             snapshot_rng = rng_2_str()
             state = load_snapshot(step, unzip_group(snapshot_data), state)
-            snapshot_sha256 = bytes2hex(sha256(snapshot_data))
+            snap_name = write_snapfile(snaps, step, snapshot_data, ".zip")
             println_list(list_file, 
-                "$(Dates.format(now(),DATE_FORMAT)) | $(string(step, pad=STEP_PAD)) | $(snapshot_rng) | $(snapshot_sha256)"
+                "$(Dates.format(now(),DATE_FORMAT)) | $(snap_name) | $(snapshot_rng)"
             )
-            write(joinpath(snaps, string(step, pad=STEP_PAD)*"_"*snapshot_sha256*".zarr.zip"), snapshot_data)
             isdone::Bool, expected_final_step::Int64 = done(step::Int, state)
             @info "step $step of $expected_final_step done"
             if isdone
