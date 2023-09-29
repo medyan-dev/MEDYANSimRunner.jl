@@ -7,6 +7,7 @@ using SHA: sha256
 using ArgCheck
 using SmallZarrGroups
 import Random
+import FileWatching
 
 
 
@@ -129,58 +130,48 @@ function start_job(out_dir, job::String;
         load_snapshot,
         done,
     )
+    basic_name_check.(split(job, '/'; keepempty=true))
     # first set up logging
     job_out = mkpath(joinpath(abspath(out_dir), job))
-    snaps = mkpath(joinpath(job_out, "snapshots"))
+    traj = mkpath(joinpath(job_out, "traj"))
     all_logs = mkpath(joinpath(job_out, "logs"))
-    logs = make_new_version(all_logs)
-    # now logs is a fresh directory to save logs to for this run.
-    logger = LoggingExtras.TeeLogger(
-        global_logger(),
-        timestamp_logger(joinpath(logs, "info.log"), Logging.Info),
-        timestamp_logger(joinpath(logs, "warn.log"), Logging.Warn),
-        timestamp_logger(joinpath(logs, "error.log"), Logging.Error),
-    )
-    list_file = open(joinpath(logs, "list.txt"); write=true)
-    with_logger(logger) do
-        @info "Starting new job."
-        @info get_version_string()
-        Random.seed!(collect(reinterpret(UInt64, sha256(job))))
-        job_header, state = setup(job_idx)
-        @info "setup complete."
-        header_str = sprint() do io
-            JSON3.pretty(io, job_header; allow_inf = true)
-        end
-        header_sha256 = bytes2hex(sha256(header_str))
-        write(joinpath(logs, "header.json"), header_str)
-        println_list(list_file,
-            "version = 2 | job = $job | header_sha256 = $header_sha256"
-        )
-        local step::Int = 0
-        snapshot_data = zip_group(save_snapshot(step, state))
-        snapshot_rng = rng_2_str()
-        state = load_snapshot(step, unzip_group(snapshot_data), state)
-        snap_name = write_snapfile(snaps, step, snapshot_data, ".zip")
-        println_list(list_file, 
-            "$(Dates.format(now(),DATE_FORMAT)) | $(snap_name) | $(snapshot_rng)"
-        )
-        @info "simulation started"
-        while true
-            state = loop(step, state)
-            step += 1
-            snapshot_data = zip_group(save_snapshot(step, state))
-            snapshot_rng = rng_2_str()
-            state = load_snapshot(step, unzip_group(snapshot_data), state)
-            snap_name = write_snapfile(snaps, step, snapshot_data, ".zip")
-            println_list(list_file, 
-                "$(Dates.format(now(),DATE_FORMAT)) | $(snap_name) | $(snapshot_rng)"
-            )
-            isdone::Bool, expected_final_step::Int64 = done(step::Int, state)
-            @info "step $step of $expected_final_step done"
-            if isdone
-                println_list(list_file, "Done")
-                @info "simulation completed"
-                break
+    in_new_log_dir(all_logs) do
+        FileWatching.Pidfile.mkpidlock("traj.lock"; wait=false) do
+            @info "Starting new job."
+            @info get_version_string()
+            Random.seed!(collect(reinterpret(UInt64, sha256(job))))
+            job_header, state = setup(job_idx)
+            @info "Setup complete."
+            header_str = sprint() do io
+                JSON3.pretty(io, job_header; allow_inf = true)
+            end
+            write_traj_file(traj, "header.json", codeunits(header_str))
+            local step::Int = 0
+            snapshot_group = ZGroup()
+            snapshot_group["snap"] = save_snapshot(step, state)
+            attrs(snapshot_group)["rng_state"] = rng_2_str()
+            attrs(snapshot_group)["step"] = step
+            snapshot_data = zip_group(snapshot_group)
+            state = load_snapshot(step, unzip_group(snapshot_data)["snap"], state)
+            write_traj_file(traj, SNAP_PREFIX*string(step)*SNAP_POSTFIX, snapshot_data)
+            @info "simulation started"
+            while true
+                state = loop(step, state)
+                step += 1
+                snapshot_group = ZGroup()
+                snapshot_group["snap"] = save_snapshot(step, state)
+                attrs(snapshot_group)["rng_state"] = rng_2_str()
+                attrs(snapshot_group)["step"] = step
+                snapshot_data = zip_group(snapshot_group)
+                state = load_snapshot(step, unzip_group(snapshot_data)["snap"], state)
+                write_traj_file(traj, SNAP_PREFIX*string(step)*SNAP_POSTFIX, snapshot_data)
+                isdone::Bool, expected_final_step::Int64 = done(step::Int, state)
+                @info "step $step of $expected_final_step done"
+                if isdone
+                    write_traj_file(traj, "done.txt", codeunits("$step steps"))
+                    @info "simulation completed"
+                    break
+                end
             end
         end
     end
@@ -195,21 +186,82 @@ function continue_job(out_dir, job;
         load_snapshot,
         done,
     )
-    error("continuing a job is not implemented yet")
-
+    basic_name_check.(split(job, '/'; keepempty=true))
+    # first set up logging
+    job_out = mkpath(joinpath(abspath(out_dir), job))
+    traj = mkpath(joinpath(job_out, "traj"))
+    all_logs = mkpath(joinpath(job_out, "logs"))
+    in_new_log_dir(all_logs) do
+        @info "Continuing job."
+        @info get_version_string()
+        pidlock = try
+            FileWatching.Pidfile.mkpidlock("traj.lock"; wait=false)
+        catch ex
+            ex isa InterruptException && rethrow()
+            @warn "failed to get traj.lock, continuing."
+            nothing
+        end
+        # Figure out what step to continue from
+        snaps = readdir(traj)
+        if "done.txt" ∈ snaps
+            @info "Simulation already finished, exiting."
+            return
+        end
+        max_step = if "header.json" ∈ snaps
+            local steps = Int64[]
+            for file_name in snaps
+                isascii(file_name) || continue
+                startswith(file_name, SNAP_PREFIX) || continue
+                endswith(file_name, SNAP_POSTFIX) || continue
+                ncodeunits(file_name) > ncodeunits(SNAP_PREFIX) + ncodeunits(SNAP_POSTFIX)
+                local step_part = file_name[begin+ncodeunits(SNAP_PREFIX):end-ncodeunits(SNAP_POSTFIX)]
+                local step_maybe = tryparse(Int, step_part)
+                if !isnothing(step_maybe)
+                    push!(steps, step_maybe)
+                end
+            end
+            @info "Continuing from step $(max_step)"
+            maximum(steps; init=-1)
+        else
+            @info "Starting new simulation."
+            -2
+        end
+        Random.seed!(collect(reinterpret(UInt64, sha256(job))))
+        job_header, state = setup(job_idx)
+        @info "setup complete."        
+        header_str = sprint() do io
+            JSON3.pretty(io, job_header; allow_inf = true)
+        end
+        write_traj_file(traj, "header.json", codeunits(header_str))
+        local step::Int = 0
+        snapshot_group = ZGroup()
+        snapshot_group["snap"] = save_snapshot(step, state)
+        attrs(snapshot_group)["rng_state"] = rng_2_str()
+        attrs(snapshot_group)["step"] = step
+        snapshot_data = zip_group(snapshot_group)
+        state = load_snapshot(step, unzip_group(snapshot_data)["snap"], state)
+        write_traj_file(traj, "snap$(step).zarr.zip", snapshot_data)
+        @info "simulation started"
+        while true
+            state = loop(step, state)
+            step += 1
+            snapshot_group = ZGroup()
+            snapshot_group["snap"] = save_snapshot(step, state)
+            attrs(snapshot_group)["rng_state"] = rng_2_str()
+            attrs(snapshot_group)["step"] = step
+            snapshot_data = zip_group(snapshot_group)
+            state = load_snapshot(step, unzip_group(snapshot_data)["snap"], state)
+            write_traj_file(traj, "snap$(step).zarr.zip", snapshot_data)
+            isdone::Bool, expected_final_step::Int64 = done(step::Int, state)
+            @info "step $step of $expected_final_step done"
+            if isdone
+                write_traj_file(traj, "done.txt", codeunits("$step steps"))
+                @info "simulation completed"
+                break
+            end
+        end
+    end
 end
-
-
-
-"""
-Print a `str` and add " | (hex sha256 of the line)\n", and then flush
-"""
-function println_list(io::IO, str::AbstractString)
-    println(io,str, " | ", bytes2hex(sha256(str)))
-    flush(io)
-    nothing
-end
-
 
 
 function zip_group(g::ZGroup)::Vector{UInt8}
@@ -225,13 +277,3 @@ function unzip_group(data::Vector{UInt8})::ZGroup
 end
 
 
-function timestamp_logger(file, level) 
-    LoggingExtras.MinLevelLogger(
-        LoggingExtras.TransformerLogger(
-            LoggingExtras.FileLogger(file; append=true),
-        ) do log
-            merge(log, (; message = "$(Dates.format(Dates.now(), DATE_FORMAT)) $(log.message)"))
-        end,
-        level,
-    )
-end
