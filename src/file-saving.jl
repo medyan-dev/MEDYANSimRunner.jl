@@ -10,6 +10,7 @@ using Random: RandomDevice
 import Dates
 import LoggingExtras
 using Logging
+using ArgCheck
 
 const DATE_FORMAT = Dates.dateformat"yyyy-mm-ddTHH:MM:SS"
 
@@ -42,10 +43,16 @@ end
 
 
 """
-Write a file if it doesn't already exist.
-If a file exists it must have the same content as `data`.
-The default write first truncates the file and then writes, so if julia crashes
-the file will be empty, corrupting the traj directory.
+Ensure a file with the contents `data` exists at the path `joinpath(dir_name, file_name)`
+
+This function can fail or be interrupted, in that case, an existing file 
+or other thing at the path
+will either not be modified, or will be replaced with a file with contents of `data`.
+
+If there is no existing file at path,
+there will either be a file with contents of `data`, or no file.
+
+If interrupted, there may be a temporary file left behind in `dir_name`.
 """
 function write_traj_file(
         dir_name::String,
