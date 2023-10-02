@@ -26,11 +26,12 @@ function timestamp_logger(file, level)
 end
 
 
-function in_new_log_dir(f, logs_parent_dir::String)
+function in_new_log_dir(f, job_out::String)
     date_part = Dates.format(Dates.today(),"yyyy-mm-dd")
     rand_part = Random.randstring(RandomDevice(), 12)
     new_name = date_part*"_"*rand_part
-    logs = mkdir(joinpath(logs_parent_dir, new_name))
+    all_logs = mkpath(joinpath(job_out, "logs"))
+    logs = mkdir(joinpath(all_logs, "logs", new_name))
     logger = LoggingExtras.TeeLogger(
         global_logger(),
         timestamp_logger(joinpath(logs, "info.log"), Logging.Info),

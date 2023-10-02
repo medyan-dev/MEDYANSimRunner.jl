@@ -134,43 +134,42 @@ function start_job(out_dir, job::String;
     # first set up logging
     job_out = mkpath(joinpath(abspath(out_dir), job))
     traj = mkpath(joinpath(job_out, "traj"))
-    all_logs = mkpath(joinpath(job_out, "logs"))
-    in_new_log_dir(all_logs) do
+    in_new_log_dir(job_out) do
         FileWatching.Pidfile.mkpidlock("traj.lock"; wait=false) do
             @info "Starting new job."
             @info get_version_string()
-            Random.seed!(collect(reinterpret(UInt64, sha256(job))))
+
+            rng_state = Random.Xoshiro(reinterpret(UInt64, sha256(job))...)
+            copy!(Random.default_rng(), rng_state)
             job_header, state = setup(job_idx)
+            copy!(rng_state, Random.default_rng())
+            
             @info "Setup complete."
             header_str = sprint() do io
                 JSON3.pretty(io, job_header; allow_inf = true)
             end
+            prev_hash = bytes2hex(sha256(header_str))
             write_traj_file(traj, "header.json", codeunits(header_str))
             local step::Int = 0
-            snapshot_group = ZGroup()
-            snapshot_group["snap"] = save_snapshot(step, state)
-            attrs(snapshot_group)["rng_state"] = rng_2_str()
-            attrs(snapshot_group)["step"] = step
-            snapshot_data = zip_group(snapshot_group)
-            state = load_snapshot(step, unzip_group(snapshot_data)["snap"], state)
-            write_traj_file(traj, SNAP_PREFIX*string(step)*SNAP_POSTFIX, snapshot_data)
+
+            state, prev_hash = save_load_snapshot!(rng_state, step, state, traj, save_snapshot, load_snapshot, prev_hash)
             @info "simulation started"
             while true
+                copy!(Random.default_rng(), rng_state)
                 state = loop(step, state)
+                copy!(rng_state, Random.default_rng())
+
                 step += 1
-                snapshot_group = ZGroup()
-                snapshot_group["snap"] = save_snapshot(step, state)
-                attrs(snapshot_group)["rng_state"] = rng_2_str()
-                attrs(snapshot_group)["step"] = step
-                snapshot_data = zip_group(snapshot_group)
-                state = load_snapshot(step, unzip_group(snapshot_data)["snap"], state)
-                write_traj_file(traj, SNAP_PREFIX*string(step)*SNAP_POSTFIX, snapshot_data)
+                state, prev_hash = save_load_snapshot!(rng_state, step, state, traj, save_snapshot, load_snapshot, prev_hash)
+
+                copy!(Random.default_rng(), rng_state)
                 isdone::Bool, expected_final_step::Int64 = done(step::Int, state)
+                copy!(rng_state, Random.default_rng())
+
                 @info "step $step of $expected_final_step done"
                 if isdone
-                    write_traj_file(traj, "done.txt", codeunits("$step steps"))
-                    @info "simulation completed"
-                    break
+                    save_footer(traj, step, prev_hash)
+                    return
                 end
             end
         end
@@ -190,8 +189,7 @@ function continue_job(out_dir, job;
     # first set up logging
     job_out = mkpath(joinpath(abspath(out_dir), job))
     traj = mkpath(joinpath(job_out, "traj"))
-    all_logs = mkpath(joinpath(job_out, "logs"))
-    in_new_log_dir(all_logs) do
+    in_new_log_dir(job_out) do
         @info "Continuing job."
         @info get_version_string()
         pidlock = try
@@ -203,11 +201,11 @@ function continue_job(out_dir, job;
         end
         # Figure out what step to continue from
         snaps = readdir(traj)
-        if "done.txt" ∈ snaps
+        if "footer.json" ∈ snaps
             @info "Simulation already finished, exiting."
             return
         end
-        max_step = if "header.json" ∈ snaps
+        local step::Int = if "header.json" ∈ snaps
             local steps = Int64[]
             for file_name in snaps
                 isascii(file_name) || continue
@@ -223,46 +221,108 @@ function continue_job(out_dir, job;
             @info "Continuing from step $(max_step)"
             maximum(steps; init=-1)
         else
-            @info "Starting new simulation."
             -2
         end
-        Random.seed!(collect(reinterpret(UInt64, sha256(job))))
+        @info "Starting new simulation."
+        rng_state = Random.Xoshiro(reinterpret(UInt64, sha256(job))...)
+        copy!(Random.default_rng(), rng_state)
         job_header, state = setup(job_idx)
-        @info "setup complete."        
-        header_str = sprint() do io
-            JSON3.pretty(io, job_header; allow_inf = true)
+        copy!(rng_state, Random.default_rng())
+        @info "Setup complete."
+        if step == -2 || step == -1
+            header_str = sprint() do io
+                JSON3.pretty(io, job_header; allow_inf = true)
+            end
+            prev_hash = bytes2hex(sha256(header_str))
+            write_traj_file(traj, "header.json", codeunits(header_str))
+            step = 0
+            state, prev_hash = save_load_snapshot!(rng_state, step, state, traj, save_snapshot, load_snapshot, prev_hash)
+            @info "Simulation started."
+        else
+            @info "Continuing simulation from step $(step)."
+            snapshot_data = read(joinpath(traj, SNAP_PREFIX*string(step)*SNAP_POSTFIX))
+            snapshot_group = unzip_group(snapshot_data)
+            reread_sub_snapshot_group = snapshot_group["snap"]
+            rng_state = str_2_rng(attrs(snapshot_group)["rng_state"])
+            copy!(Random.default_rng(), rng_state)
+            state = load_snapshot(step, reread_sub_snapshot_group, state)
+            copy!(rng_state, Random.default_rng())
+            prev_hash = bytes2hex(sha256(snapshot_data))
+            if step > 0
+                # check if done here.
+                copy!(Random.default_rng(), rng_state)
+                isdone::Bool, expected_final_step::Int64 = done(step::Int, state)
+                copy!(rng_state, Random.default_rng())
+                @info "step $step of $expected_final_step done"
+                if isdone
+                    save_footer(traj, step, prev_hash)
+                    return
+                end
+            end
         end
-        write_traj_file(traj, "header.json", codeunits(header_str))
-        local step::Int = 0
-        snapshot_group = ZGroup()
-        snapshot_group["snap"] = save_snapshot(step, state)
-        attrs(snapshot_group)["rng_state"] = rng_2_str()
-        attrs(snapshot_group)["step"] = step
-        snapshot_data = zip_group(snapshot_group)
-        state = load_snapshot(step, unzip_group(snapshot_data)["snap"], state)
-        write_traj_file(traj, "snap$(step).zarr.zip", snapshot_data)
-        @info "simulation started"
         while true
+            copy!(Random.default_rng(), rng_state)
             state = loop(step, state)
+            copy!(rng_state, Random.default_rng())
+
             step += 1
-            snapshot_group = ZGroup()
-            snapshot_group["snap"] = save_snapshot(step, state)
-            attrs(snapshot_group)["rng_state"] = rng_2_str()
-            attrs(snapshot_group)["step"] = step
-            snapshot_data = zip_group(snapshot_group)
-            state = load_snapshot(step, unzip_group(snapshot_data)["snap"], state)
-            write_traj_file(traj, "snap$(step).zarr.zip", snapshot_data)
-            isdone::Bool, expected_final_step::Int64 = done(step::Int, state)
+            state, prev_hash = save_load_snapshot!(rng_state, step, state, traj, save_snapshot, load_snapshot, prev_hash)
+
+            copy!(Random.default_rng(), rng_state)
+            isdone, expected_final_step = done(step::Int, state)
+            copy!(rng_state, Random.default_rng())
+
             @info "step $step of $expected_final_step done"
             if isdone
-                write_traj_file(traj, "done.txt", codeunits("$step steps"))
-                @info "simulation completed"
-                break
+                save_footer(traj, step, prev_hash)
+                return
             end
         end
     end
 end
 
+
+function save_load_state!(
+        rng_state,
+        step::Int,
+        state,
+        traj::String,
+        save_snapshot,
+        load_snapshot,
+        prev_hash::String,
+    )
+    snapshot_group = ZGroup()
+
+    copy!(Random.default_rng(), rng_state)
+    sub_snapshot_group = save_snapshot(step, state)
+    copy!(rng_state, Random.default_rng())
+
+    snapshot_group["snap"] = sub_snapshot_group
+    attrs(snapshot_group)["rng_state"] = rng_2_str(rng_state)
+    attrs(snapshot_group)["step"] = step
+    attrs(snapshot_group)["prev_hash"] = prev_hash
+    snapshot_data = zip_group(snapshot_group)
+    reread_sub_snapshot_group = unzip_group(snapshot_data)["snap"]
+
+    copy!(Random.default_rng(), rng_state)
+    state = load_snapshot(step, reread_sub_snapshot_group, state)
+    copy!(rng_state, Random.default_rng())
+
+    write_traj_file(traj, SNAP_PREFIX*string(step)*SNAP_POSTFIX, snapshot_data)
+    state, bytes2hex(sha256(snapshot_data))
+end
+
+function save_footer(traj, step, prev_hash)
+    job_footer = [
+        "steps" => step,
+        "prev_hash" => prev_hash,
+    ]
+    footer_str = sprint() do io
+        JSON3.pretty(io, job_footer; allow_inf = true)
+    end
+    write_traj_file(traj, "footer.json", codeunits(footer_str))
+    @info "Simulation completed."
+end
 
 function zip_group(g::ZGroup)::Vector{UInt8}
     io = IOBuffer()
