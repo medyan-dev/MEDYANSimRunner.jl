@@ -8,6 +8,7 @@ using ArgCheck
 using SmallZarrGroups
 import Random
 import FileWatching
+import OrderedCollections
 
 
 
@@ -50,17 +51,8 @@ is called to load a snapshot.
 is called to check if the simulation is done.
 
 `ARGS` is the command line arguments passed to the script.
-This should be a list of strings.
-It can include the following optional arguments:
 
- - `--out=<output directory>` defaults to cwd, where to save the output.
-This directory will be created if it does not exist.
-
- - `--batch=<batch number>` defaults to "-1" which means run all jobs.
-If a batch number is given, only run the jobs with that batch number.
-
- - `--continue` defaults to restart jobs. 
-If set, try to continue jobs that were previously interrupted.
+$(CLI_HELP)
 """
 function run_sim(cli_args;
         jobs::Vector{String},
@@ -320,10 +312,10 @@ function save_load_state!(
 end
 
 function save_footer(traj, step, prev_hash)
-    job_footer = [
+    job_footer = OrderedCollections.OrderedDict([
         "steps" => step,
         "prev_hash" => prev_hash,
-    ]
+    ])
     footer_str = sprint() do io
         JSON3.pretty(io, job_footer; allow_inf = true)
     end

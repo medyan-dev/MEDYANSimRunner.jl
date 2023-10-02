@@ -11,10 +11,12 @@ const CLI_HELP = (
     Usage: julia main.jl --out=output_dir --batch=1 --continue
 
     Options:
+
         --out=<dir>         Save the trajectories and logs to this directory.
+                            This directory will be created if it does not exist.
                             Defaults to the current working directory.
 
-        --batch=<integer>   Run just one of the jobs.
+        --batch=<job index>   Run just one of the jobs.
                             By default all jobs will run.
 
         --continue          Try to continue from existing snapshots

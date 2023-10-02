@@ -1,8 +1,4 @@
-[
-    {
-        "steps": 11
-    },
-    {
-        "prev_hash": "9537b4158a32fcc20f90f08d17bab69026a21b0aa996a59933ec4827642540a4"
-    }
-]
+{
+    "steps": 11,
+    "prev_hash": "9537b4158a32fcc20f90f08d17bab69026a21b0aa996a59933ec4827642540a4"
+}

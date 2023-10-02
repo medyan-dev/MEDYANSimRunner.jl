@@ -52,5 +52,5 @@ function loop(step::Int, state; kwargs...)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    MEDYANSimRunner.run_sim(ARGS;jobs, setup, loop, load_snapshot, save_snapshot, done)
+    MEDYANSimRunner.run_sim(ARGS; jobs, setup, loop, load_snapshot, save_snapshot, done)
 end

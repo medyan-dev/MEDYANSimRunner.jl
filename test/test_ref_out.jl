@@ -101,4 +101,25 @@ end
         @test false
     end
 end
+@testset "continue complete job" begin
+    test_out = joinpath(@__DIR__, "example/output/continue complete")
+    rm(test_out; force=true, recursive=true)
+    mkpath(test_out)
+    cp(joinpath(@__DIR__, "example/output-ref"), test_out; force=true)
+    with_logger(warn_only_logger) do
+        MEDYANSimRunner.run_sim(["--out=$test_out","--batch=1", "--continue"];
+            UserCode.jobs,
+            UserCode.setup,
+            UserCode.save_snapshot,
+            UserCode.load_snapshot,
+            UserCode.loop,
+            UserCode.done,
+        )
+    end
+    out_diff = sprint(MEDYANSimRunner.print_traj_diff, joinpath(ref_out,"1"), joinpath(test_out,"1"))
+    if !isempty(out_diff)
+        println(out_diff)
+        @test false
+    end
+end
 end

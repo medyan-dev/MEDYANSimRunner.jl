@@ -81,4 +81,16 @@ function print_traj_diff(io::IO, jobout1::AbstractString, jobout2::AbstractStrin
         println(io, snapshot1dir, " dir missing or empty")
     else
     end
+
+    # header.json
+    footer1 = joinpath(jobout1, "traj", "footer.json")
+    footer2 = joinpath(jobout2, "traj", "footer.json")
+    if isfile(footer1) & isfile(footer2)
+        print_json_diff(io, read(footer1, String), read(footer2, String))
+    elseif isfile(footer1) & !isfile(footer2)
+        println(io, footer2, " file missing")
+    elseif !isfile(footer1) & isfile(footer2)
+        println(io, footer1, " file missing")
+    else
+    end
 end
