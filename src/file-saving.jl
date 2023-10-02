@@ -63,10 +63,12 @@ function write_traj_file(
     new_hash = sha256(data)
     file_path = joinpath(dir_name, file_name)
     if isfile(file_path)
-        existing_hash = open(sha256, file_path)
-        if new_hash == existing_hash
-            # file exists and is correct, return
-            return
+        if filesize(file_path) == length(data)
+            existing_hash = open(sha256, file_path)
+            if new_hash == existing_hash
+                # file exists and is correct, return
+                return
+            end
         end
     end
     # safely create the new file.
@@ -81,10 +83,12 @@ function write_traj_file(
         # on error, check if file was made by another process, and is still valid.
         if err < 0
             if isfile(file_path)
-                existing_hash = open(sha256, file_path)
-                if new_hash == existing_hash
-                    # file exists and is correct, return
-                    return
+                if filesize(file_path) == length(data)
+                    existing_hash = open(sha256, file_path)
+                    if new_hash == existing_hash
+                        # file exists and is correct, return
+                        return
+                    end
                 end
             end
             # otherwise error
