@@ -22,7 +22,7 @@ function setup(job::String; kwargs...)
 end
 
 function save_snapshot(step::Int, state; kwargs...)::ZGroup
-    @info "saving states" state
+    # @info "saving states" state
     group = ZGroup()
     group["states"] = state
     group

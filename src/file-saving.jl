@@ -33,7 +33,7 @@ function in_new_log_dir(f, job_out::String)
     all_logs = mkpath(joinpath(job_out, "logs"))
     logs = mkdir(joinpath(all_logs, new_name))
     logger = LoggingExtras.TeeLogger(
-        global_logger(),
+        current_logger(),
         timestamp_logger(joinpath(logs, "info.log"), Logging.Info),
         timestamp_logger(joinpath(logs, "warn.log"), Logging.Warn),
         timestamp_logger(joinpath(logs, "error.log"), Logging.Error),

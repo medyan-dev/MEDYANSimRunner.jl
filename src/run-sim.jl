@@ -157,7 +157,7 @@ function start_job(out_dir, job::String;
             local step::Int = 0
 
             state, prev_hash = save_load_state!(rng_state, step, state, traj, save_snapshot, load_snapshot, prev_hash)
-            @info "simulation started"
+            @info "Simulation started."
             while true
                 copy!(Random.default_rng(), rng_state)
                 state = loop(step, state)
@@ -223,12 +223,11 @@ function continue_job(out_dir, job;
                         push!(steps, step_maybe)
                     end
                 end
-                @info "Continuing from step $(max_step)"
                 maximum(steps; init=-1)
             else
                 -2
             end
-            @info "Starting new simulation."
+            @info "Setting up simulation."
             rng_state = Random.Xoshiro(reinterpret(UInt64, sha256(job))...)
             copy!(Random.default_rng(), rng_state)
             job_header, state = setup(job)
