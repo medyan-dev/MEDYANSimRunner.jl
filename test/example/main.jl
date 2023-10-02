@@ -1,4 +1,11 @@
-# fibonacci sequence
+# Install dependencies with:
+# julia --project=.. -e 'using Pkg; pkg"dev ../.."; pkg"instantiate";'
+
+# Run this with:
+# JULIA_LOAD_PATH="@" julia --project=.. --startup-file=no main.jl --out=output
+
+# Continue crashed simulations this with:
+# JULIA_LOAD_PATH="@" julia --project=.. --startup-file=no main.jl --out=output --continue
 
 
 using SmallZarrGroups

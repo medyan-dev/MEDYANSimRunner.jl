@@ -6,11 +6,29 @@ end
 
 Base.:(==)(a::CLIOptions, b::CLIOptions) = all((isequal(getfield(a,k), getfield(b,k)) for k in 1:fieldcount(typeof(a))))
 
+const CLI_HELP = (
+    """
+    Usage: julia main.jl --out=output_dir --batch=1 --continue
 
+    Options:
+        --out=<dir>         Save the trajectories and logs to this directory.
+                            Defaults to the current working directory.
+
+        --batch=<integer>   Run just one of the jobs.
+                            By default all jobs will run.
+
+        --continue          Try to continue from existing snapshots
+                            in the output. By default, existing snapshots will
+                            be deleted, and the simulation will start from
+                            scratch.
+
+        --help              Print out this message.
+    """
+)
 
 function parse_cli_args(cli_args, jobs::Vector{String})::Union{CLIOptions, Nothing}
     if any(startswith("--h"), cli_args) || any(startswith("-h"), cli_args)
-        @info "TODO print help message"
+        println(CLI_HELP)
         return
     end
 
