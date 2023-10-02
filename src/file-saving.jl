@@ -76,6 +76,7 @@ function write_traj_file(
             error("short write of $(repr(file_name)) data")
         end
         close(temp_out)
+        # mv(temp_path, file_path; force=true)
         err = ccall(:jl_fs_rename, Int32, (Cstring, Cstring), temp_path, file_path)
         # on error, check if file was made by another process, and is still valid.
         if err < 0
@@ -89,6 +90,7 @@ function write_traj_file(
             # otherwise error
             error("$(repr(file_path)) is corrupted")
         end
+        nothing
     end
 end
 
