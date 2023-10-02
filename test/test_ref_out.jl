@@ -5,12 +5,21 @@ using Test
 
 using MEDYANSimRunner
 
+module UserCode
+    include("example/main.jl")
+end
+
 
 @testset "good example" begin
-    test_out = "examples/good/output"
+    test_out = joinpath(@__DIR__, "examples/output/good")
     rm(test_out; force=true, recursive=true)
-    mkpath(test_out)
-    MEDYANSimRunner.run("examples/good/input/", test_out, "1")
+    MEDYANSimRunner.run_sim(["--out=$test_out","--batch=1"];
+        UserCode.setup,
+        UserCode.save_snapshot,
+        UserCode.load_snapshot,
+        UserCode.loop,
+        UserCode.done,
+    )
     out_diff = sprint(MEDYANSimRunner.diff, "examples/good/output-ref/1", joinpath(test_out,"1"))
     if !isempty(out_diff)
         println(out_diff)

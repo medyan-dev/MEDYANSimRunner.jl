@@ -71,6 +71,7 @@ function run_sim(cli_args;
         done,
         kwargs...
     )
+    @nospecialize
     @argcheck !isempty(jobs)
     @argcheck allunique(jobs)
     maybe_options = parse_cli_args(deepcopy(cli_args), jobs)
