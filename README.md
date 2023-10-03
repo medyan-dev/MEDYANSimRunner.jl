@@ -4,7 +4,9 @@
 
 Manage long running restartable MEDYAN.jl simulations.
 
-Simulations run using code stored in an `input` directory and write outputs to an `output` directory.
+Simulations run using julia code in a `main.jl` script and write outputs to an `output` directory.
+
+Inspired by how build scripts work in https://github.com/JuliaPackaging/BinaryBuilder.jl
 
 ## Installation
 First install and run Julia https://julialang.org/downloads/
@@ -12,89 +14,56 @@ First install and run Julia https://julialang.org/downloads/
 Then in Julia install this repo as a regular Julia package.
 ```julia
 import Pkg
-
-Pkg.add("https://github.com/medyan-dev/MEDYANSimRunner.jl")
+Pkg.add("MEDYANSimRunner")
 ```
-
-This will add a `medyansimrunner` to `~/.julia/bin`, so add `~/.julia/bin` to your PATH.
-
-Run:
-```sh
-medyansimrunner -h
-```
-To see the help.
 
 ## Example
-Run the following in the root of this project.
+Run the following in the root of this repo.
 ```sh
-cd test/examples/good
-medyansimrunner run input output 1
+julia --project=test -e 'using Pkg; pkg"dev ."; pkg"instantiate";'
+JULIA_LOAD_PATH="@" julia --project=test --startup-file=no test/example/main.jl --out=test/output --batch=1 --continue
 ```
-This will run the example simulation in `test/examples/good/input` with job index `"1"` and store the output in `test/examples/good/output/1`.
-
-The `job_idx` string gets passed to the `setup` function in `main.jl`.
-
-The `job_idx` is hashed and set as the default RNG seed right before `setup` is called.
-
-Any backslash in the job index will be replaced with a "/".
-
-The job index must be valid utf-8.
-
-Job index must not be empty.
-
-Each part of job index when split by "/" must not contain any of the following characters:
-
-```julia
-[ ',', '\r', '\n', '\0', '*', '|', ':', '<', '>', '?', '"',]
-```
-
-Each part must not end or start in a period or dot.
+This will run the 1st batch of the example simulation in `test/example/main.jl` 
+with the `test/` environment and store the output in `test/output/`.
 
 The output directory will be created if it doesn't already exist.
 
-The job index string can be loaded from a line of a file.
-
-For example, to run a job with a index in the third line of file `jobnames.txt` use:
-
-```sh
-medyansimrunner run input output jobnames.txt 3
-```
+If the `"--batch=<job index>"` option is not included, all jobs specified in `main.jl` will be run.
 
 
-## input kwargs
-
-- `step-timeout`: the maximum amount of time in seconds each step is allowed to take before the job is killed, defaults to infinity.
-
-- `max-steps`: the maximum number of steps a job is allowed to take before the job is killed.
-
-- `startup-timeout`: the maximum amount of time in seconds to load everything and run the first loop, defaults to infinity.
-
-- `max-snapshot-MB`: the maximum amount of hard drive space each snapshot is allowed to use in megabytes.
-
-## `input` directory
-
-The input directory must contain a `main.jl` file, a `Manifest.toml`, and a `Project.toml`.
-
-The input directory will be the working directory of the simulation and can include other data needed for the simulation, including an `Artifacts.toml`
-
-The input directory should not be mutated during or after a simulation.
-
-### `main.jl` file
+### `main.jl` script
 
 This file contains the julia functions used when running the simulation.
-These functions can modify any input state variables, but in general should return the state.
+These functions can modify the input state variable, but in general should return the state.
 These functions can also use the default random number generator, this will automatically saved and loaded.
+
+At the end of `main.jl` there should be the lines:
+```julia
+if abspath(PROGRAM_FILE) == @__FILE__
+    MEDYANSimRunner.run_sim(ARGS; jobs, setup, loop, load_snapshot, save_snapshot, done)
+end
+```
+
+To run the simulation if `main.jl` is called as a julia script.
 
 #### Standard input parameters.
  - `step::Int`: starts out at 0 after setup and is auto incremented right after every `loop`.
 
-#### `setup(job_idx::String; kwargs...) -> header_dict, state`
-Return the header dictionary to be written as the `header.json` file in output.
+#### `jobs::Vector{String}`
+A vector of jobs to run. Each job represents one variant of the simulation that can be run.
+This is useful if many simulations need to be run in parallel. The `"--batch=<job index>"` argument
+can be used to pick just one job to run.
+
+The selected `job` string gets passed to the `setup` function in `main.jl`.
+The `job` string is also used to seed the default RNG right before `setup` is called.
+
+#### `setup(job::String; kwargs...) -> header_dict, state`
+Return the header dictionary to be written as the `header.json` file in output trajectory.
 Also return the state that gets passed on to `loop` and the state that gets passed to `save_snapshot` and `load_snapshot`.
 
-`job_idx::String`: The job index. This is used for multi job simulations.
+`job::String`: The job. This is used for multi job simulations.
 
-#### `save_snapshot(step::Int, state; kwargs...)::SmallZarrGroups.ZGroup`
+#### `save_snapshot(step::Int, state; kwargs...)-> group::SmallZarrGroups.ZGroup`
 Return the state of the system as a `SmallZarrGroups.ZGroup`
 This function should not mutate `state`
 
@@ -116,20 +85,14 @@ This function should not mutate `state`
 Return the state that gets passed to `save_snapshot`
 
 
-
-### `Manifest.toml` and `Project.toml`
-
-These contain the julia environment used when running the simulation. 
-These must contain SmallZarrGroups, JSON3, and LoggingExtras, because these are required for saving data.
-
 ### Main loop pseudo code
 
 ```
 activate and instantiate the environment
 include("main.jl")
-create output directory based on job_idx if it doesn't exist
-Random.seed!(collect(reinterpret(UInt64, sha256(job_idx))))
-job_header, state =  setup(job_idx)
+create output directory based on job if it doesn't exist
+Random.seed!(collect(reinterpret(UInt64, sha256(job))))
+job_header, state =  setup(job)
 save job_header
 step = 0
 SmallZarrGroups.save_dir(snapshot_zip_file, save_snapshot(step, state))
@@ -149,87 +112,23 @@ end
 
 ## `output` directory
 
-The output directory has an `out$job_idx` subdirectory for job `job_idx`'s output.
+The output directory has a subdirectory for each job's output. 
+The job string is the name of the subdirectory.
 
-Each out subdirectory has the following files.
+Each job's output subdirectory has the following files.
 
-### `info.log`
-Any logs, warnings, and errors generated by the simulation are saved in this file.
+### `logs/<timestamp_randomstring>/{info|warn|error}.log`
+Any logs, warnings, and errors generated by the simulation are saved in these files.
 
-### `warn.log`
-Any warnings, and errors generated by the simulation are saved in this file.
-
-### `error.log`
-Any errors generated by the simulation are saved in this file.
-
-### `header.json`
+### `traj/header.json`
 A description of the system.
 
-### `list.txt`
-Data describing the saved snapshots, and if the simulation is done or errored, or needs to be continued.
+### `traj/snap<step>.zarr.zip`
+Contains `snap$i.zarr.zip` files where `i` is the step of the simulation.
+The state returned by `setup` is stored in `snap0.zarr.zip`
+The user data is stored in the `"snap"` sub group. The root group contains
+some metadata used by `MEDYANSimRunner`.
 
-The last element in each line is the sha256 of the line, not including the last comma space, and hash value.
-
-
-The first line is.
-```
-version = 1, job_idx = 1, input_tree_hash = 5a936e..., 54bf8d69288...
-```
-- `version`: version of the info.txt format.
-- `job_idx`: index of the job. 
-- `input_tree_hash`: hash of input directory calculated with [`my_tree_hash`](src/treehash.jl)
-
-The second line is:
-```
-header_sha256 = 2cf934..., 312f788...
-```
-- `header_sha256`: hash of header.json.
-Or:
-```
-Error starting job, 8d69288...
-```
-
-After these lines each of the next lines correspond to a saved snapshot.
-
-These have the format:
-```
-yyyy-mm-dd HH:MM:SS, step number, nthreads, julia versioninfo, rng state, snapshot sha256, line sha256
-```
-
-`snapshot sha256` is the sha256 of the snapshot zip file.
-
-The final line explains how the simulation ended it can be one of the following:
-```
-Error starting job, line sha256
-```
-
-```
-Error running job, line sha256
-```
-
-```
-Error startup_timeout of $startup_timeout seconds reached, line sha256
-```
-
-```
-Error step_timeout of $step_timeout seconds reached, line sha256
-```
-
-```
-Error max_steps of $max_steps steps reached, line sha256
-```
-
-```
-Error max_snapshot_MB of $max_snapshot_MB MB reached, line sha256
-```
-
-```
-Done, line sha256
-```
-
-See the log files for more details and error messages.
-
-
-### `snapshots` subdirectory
-Contains `snapshot$i.zarr.zip` files where `i` is the step of the simulation.
-The state returned by `setup` is stored in `snapshot0.zarr.zip`
+### `traj/footer.json`
+This is created to show a trajectory is complete.
+It contains some metadata about the trajectory.
