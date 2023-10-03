@@ -27,7 +27,7 @@ end
 
 
 function in_new_log_dir(f, job_out::String)
-    date_part = Dates.format(Dates.now(),DATE_FORMAT)
+    date_part = Dates.format(Dates.now(),"yyyy-mm-ddTHH-MM-SS")
     rand_part = Random.randstring(RandomDevice(), 12)
     new_name = date_part*"_"*rand_part
     all_logs = mkpath(joinpath(job_out, "logs"))
