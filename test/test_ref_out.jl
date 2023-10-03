@@ -19,7 +19,7 @@ warn_only_logger = MinLevelLogger(current_logger(), Logging.Warn);
 
 @testset "full run example" begin
     for continue_sim in (true,false)
-        test_out = joinpath(@__DIR__, "example/output/full",continue_sim ? "con" : "start")
+        test_out = joinpath(@__DIR__, "example/output/full",continue_sim ? "conti" : "start")
         rm(test_out; force=true, recursive=true)
         args = ["--out=$test_out","--batch=1"]
         continue_sim && push!(args,"--continue")
