@@ -14,9 +14,9 @@ using OrderedCollections: OrderedDict
 import MEDYANSimRunner
 
 jobs = [
-    "1",
-    "2",
-    "3",
+    "a",
+    "b",
+    "c",
 ]
 
 function setup(job::String; kwargs...)

@@ -12,8 +12,11 @@ module UserCode
 end
 @testset "reference output" begin
 
-
-ref_out = joinpath(@__DIR__, "example/output-ref")
+ref_out = if VERSION >= v"1.10"
+    joinpath(@__DIR__, "example/output-ref-1_10")
+else
+    joinpath(@__DIR__, "example/output-ref-1_9")
+end
 warn_only_logger = MinLevelLogger(current_logger(), Logging.Warn);
 
 
@@ -33,74 +36,61 @@ warn_only_logger = MinLevelLogger(current_logger(), Logging.Warn);
                 UserCode.done,
             )
         end
-        out_diff = sprint(MEDYANSimRunner.print_traj_diff, joinpath(ref_out,"1"), joinpath(test_out,"1"))
+        out_diff = sprint(MEDYANSimRunner.print_traj_diff, joinpath(ref_out,"a"), joinpath(test_out,"a"))
         if !isempty(out_diff)
             println(out_diff)
             @test false
         end
     end
 end
-@testset "partial restart example $v" for v in 1:4
-    test_out = joinpath(@__DIR__, "example/output/restart $v")
-    rm(test_out; force=true, recursive=true)
-    mkpath(test_out)
-    cp(joinpath(@__DIR__, "example/output-ref partial $v"), test_out; force=true)
-    with_logger(warn_only_logger) do
-        MEDYANSimRunner.run_sim(["--out=$test_out","--batch=1"];
-            UserCode.jobs,
-            UserCode.setup,
-            UserCode.save_snapshot,
-            UserCode.load_snapshot,
-            UserCode.loop,
-            UserCode.done,
-        )
-    end
-    out_diff = sprint(MEDYANSimRunner.print_traj_diff, joinpath(ref_out,"1"), joinpath(test_out,"1"))
-    if !isempty(out_diff)
-        println(out_diff)
-        @test false
-    end
-end
-@testset "partial continue example $v" for v in 1:4
-    test_out = joinpath(@__DIR__, "example/output/continue $v")
-    rm(test_out; force=true, recursive=true)
-    mkpath(test_out)
-    cp(joinpath(@__DIR__, "example/output-ref partial $v"), test_out; force=true)
-    with_logger(warn_only_logger) do
-        MEDYANSimRunner.run_sim(["--out=$test_out","--batch=1", "--continue"];
-            UserCode.jobs,
-            UserCode.setup,
-            UserCode.save_snapshot,
-            UserCode.load_snapshot,
-            UserCode.loop,
-            UserCode.done,
-        )
-    end
-    out_diff = sprint(MEDYANSimRunner.print_traj_diff, joinpath(ref_out,"1"), joinpath(test_out,"1"))
-    if !isempty(out_diff)
-        println(out_diff)
-        @test false
-    end
-end
-@testset "continue complete job" begin
-    test_out = joinpath(@__DIR__, "example/output/continue complete")
-    rm(test_out; force=true, recursive=true)
-    mkpath(test_out)
-    cp(joinpath(@__DIR__, "example/output-ref"), test_out; force=true)
-    with_logger(warn_only_logger) do
-        MEDYANSimRunner.run_sim(["--out=$test_out","--batch=1", "--continue"];
-            UserCode.jobs,
-            UserCode.setup,
-            UserCode.save_snapshot,
-            UserCode.load_snapshot,
-            UserCode.loop,
-            UserCode.done,
-        )
-    end
-    out_diff = sprint(MEDYANSimRunner.print_traj_diff, joinpath(ref_out,"1"), joinpath(test_out,"1"))
-    if !isempty(out_diff)
-        println(out_diff)
-        @test false
+@testset "partial restart example $v" for v in 1:8
+    for continue_sim in (true,false)
+        test_out = joinpath(@__DIR__, "example/output/restart $v",continue_sim ? "conti" : "start")
+        mkpath(test_out)
+        cp(ref_out, test_out; force=true)
+        if v > 1
+            rm(joinpath(test_out,"a/traj/footer.json"))
+        end
+        if v > 2
+            rm(joinpath(test_out,"a/traj/snap11.zarr.zip"))
+        end
+        if v > 3
+            for i in 10:-1:5
+                rm(joinpath(test_out,"a/traj/snap$i.zarr.zip"))
+            end
+        end
+        if v > 4
+            for i in 4:-1:2
+                rm(joinpath(test_out,"a/traj/snap$i.zarr.zip"))
+            end
+        end
+        if v > 5
+            rm(joinpath(test_out,"a/traj/snap1.zarr.zip"))
+        end
+        if v > 6
+            rm(joinpath(test_out,"a/traj/snap0.zarr.zip"))
+        end
+        if v > 7
+            rm(joinpath(test_out,"a/traj/header.json"))
+        end
+
+        args = ["--out=$test_out","--batch=1"]
+        continue_sim && push!(args,"--continue")
+        with_logger(warn_only_logger) do
+            MEDYANSimRunner.run_sim(args;
+                UserCode.jobs,
+                UserCode.setup,
+                UserCode.save_snapshot,
+                UserCode.load_snapshot,
+                UserCode.loop,
+                UserCode.done,
+            )
+        end
+        out_diff = sprint(MEDYANSimRunner.print_traj_diff, joinpath(ref_out,"a"), joinpath(test_out,"a"))
+        if !isempty(out_diff)
+            println(out_diff)
+            @test false
+        end
     end
 end
 end

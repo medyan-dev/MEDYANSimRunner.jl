@@ -144,11 +144,11 @@ function start_job(out_dir, job::String;
             header_str = sprint() do io
                 JSON3.pretty(io, job_header; allow_inf = true)
             end
-            prev_hash = bytes2hex(sha256(header_str))
+            prev_sha256 = bytes2hex(sha256(header_str))
             write_traj_file(traj, "header.json", codeunits(header_str))
             local step::Int = 0
 
-            state, prev_hash = save_load_state!(rng_state, step, state, traj, save_snapshot, load_snapshot, prev_hash)
+            state, prev_sha256 = save_load_state!(rng_state, step, state, traj, save_snapshot, load_snapshot, prev_sha256)
             @info "Simulation started."
             while true
                 copy!(Random.default_rng(), rng_state)
@@ -156,7 +156,7 @@ function start_job(out_dir, job::String;
                 copy!(rng_state, Random.default_rng())
 
                 step += 1
-                state, prev_hash = save_load_state!(rng_state, step, state, traj, save_snapshot, load_snapshot, prev_hash)
+                state, prev_sha256 = save_load_state!(rng_state, step, state, traj, save_snapshot, load_snapshot, prev_sha256)
 
                 copy!(Random.default_rng(), rng_state)
                 isdone::Bool, expected_final_step::Int64 = done(step::Int, state)
@@ -164,7 +164,7 @@ function start_job(out_dir, job::String;
 
                 @info "step $step of $expected_final_step done"
                 if isdone
-                    save_footer(traj, step, prev_hash)
+                    save_footer(traj, step, prev_sha256)
                     return
                 end
             end
@@ -229,10 +229,10 @@ function continue_job(out_dir, job;
                 header_str = sprint() do io
                     JSON3.pretty(io, job_header; allow_inf = true)
                 end
-                prev_hash = bytes2hex(sha256(header_str))
+                prev_sha256 = bytes2hex(sha256(header_str))
                 write_traj_file(traj, "header.json", codeunits(header_str))
                 step = 0
-                state, prev_hash = save_load_state!(rng_state, step, state, traj, save_snapshot, load_snapshot, prev_hash)
+                state, prev_sha256 = save_load_state!(rng_state, step, state, traj, save_snapshot, load_snapshot, prev_sha256)
                 @info "Simulation started."
             else
                 @info "Continuing simulation from step $(step)."
@@ -243,7 +243,7 @@ function continue_job(out_dir, job;
                 copy!(Random.default_rng(), rng_state)
                 state = load_snapshot(step, reread_sub_snapshot_group, state)
                 copy!(rng_state, Random.default_rng())
-                prev_hash = bytes2hex(sha256(snapshot_data))
+                prev_sha256 = bytes2hex(sha256(snapshot_data))
                 if step > 0
                     # check if done here.
                     copy!(Random.default_rng(), rng_state)
@@ -251,7 +251,7 @@ function continue_job(out_dir, job;
                     copy!(rng_state, Random.default_rng())
                     @info "step $step of $expected_final_step done"
                     if isdone
-                        save_footer(traj, step, prev_hash)
+                        save_footer(traj, step, prev_sha256)
                         return
                     end
                 end
@@ -262,7 +262,7 @@ function continue_job(out_dir, job;
                 copy!(rng_state, Random.default_rng())
 
                 step += 1
-                state, prev_hash = save_load_state!(rng_state, step, state, traj, save_snapshot, load_snapshot, prev_hash)
+                state, prev_sha256 = save_load_state!(rng_state, step, state, traj, save_snapshot, load_snapshot, prev_sha256)
 
                 copy!(Random.default_rng(), rng_state)
                 isdone, expected_final_step = done(step::Int, state)
@@ -270,7 +270,7 @@ function continue_job(out_dir, job;
 
                 @info "step $step of $expected_final_step done"
                 if isdone
-                    save_footer(traj, step, prev_hash)
+                    save_footer(traj, step, prev_sha256)
                     return
                 end
             end
@@ -288,7 +288,7 @@ function save_load_state!(
         traj::String,
         save_snapshot,
         load_snapshot,
-        prev_hash::String,
+        prev_sha256::String,
     )
     snapshot_group = ZGroup()
 
@@ -299,7 +299,7 @@ function save_load_state!(
     snapshot_group["snap"] = sub_snapshot_group
     attrs(snapshot_group)["rng_state"] = rng_2_str(rng_state)
     attrs(snapshot_group)["step"] = step
-    attrs(snapshot_group)["prev_hash"] = prev_hash
+    attrs(snapshot_group)["prev_sha256"] = prev_sha256
     snapshot_data = zip_group(snapshot_group)
     reread_sub_snapshot_group = unzip_group(snapshot_data)["snap"]
 
@@ -311,10 +311,10 @@ function save_load_state!(
     state, bytes2hex(sha256(snapshot_data))
 end
 
-function save_footer(traj, step, prev_hash)
+function save_footer(traj, step, prev_sha256)
     job_footer = OrderedCollections.OrderedDict([
         "steps" => step,
-        "prev_hash" => prev_hash,
+        "prev_sha256" => prev_sha256,
     ])
     footer_str = sprint() do io
         JSON3.pretty(io, job_footer; allow_inf = true)
