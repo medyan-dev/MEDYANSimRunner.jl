@@ -95,13 +95,13 @@ Random.seed!(collect(reinterpret(UInt64, sha256(job))))
 job_header, state =  setup(job)
 save job_header
 step = 0
-SmallZarrGroups.save_dir(snapshot_zip_file, save_snapshot(step, state))
-state = load_snapshot(step, SmallZarrGroups.load_dir(snapshot_zip_file), state)
+SmallZarrGroups.save_zip(snapshot_zip_file, save_snapshot(step, state))
+state = load_snapshot(step, SmallZarrGroups.load_zip(snapshot_zip_file), state)
 while true
     state = loop(step, state)
     step = step + 1
-    SmallZarrGroups.save_dir(snapshot_zip_file, save_snapshot(step, state))
-    state = load_snapshot(step, SmallZarrGroups.load_dir(snapshot_zip_file), state)
+    SmallZarrGroups.save_zip(snapshot_zip_file, save_snapshot(step, state))
+    state = load_snapshot(step, SmallZarrGroups.load_zip(snapshot_zip_file), state)
     if done(step::Int, state)[1]
         break
     end
