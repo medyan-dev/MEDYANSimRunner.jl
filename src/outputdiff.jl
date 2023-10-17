@@ -71,8 +71,8 @@ function print_traj_diff(io::IO, jobout1::AbstractString, jobout2::AbstractStrin
         for snapshotname in (snapshots1 ∩ snapshots2)
             full_name1 = joinpath(snapshot1dir, snapshotname)
             full_name2 = joinpath(snapshot2dir, snapshotname)
-            group1 = SmallZarrGroups.load_dir(full_name1)
-            group2 = SmallZarrGroups.load_dir(full_name2)
+            group1 = SmallZarrGroups.load_zip(full_name1)
+            group2 = SmallZarrGroups.load_zip(full_name2)
             SmallZarrGroups.print_diff(io, group1, group2, full_name1, full_name2, "", startswith("#"))
         end
     elseif snapshot1dir_exists && !snapshot2dir_exists

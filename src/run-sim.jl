@@ -325,14 +325,12 @@ end
 
 function zip_group(g::ZGroup)::Vector{UInt8}
     io = IOBuffer()
-    writer = SmallZarrGroups.ZarrZipWriter(io)
-    SmallZarrGroups.save_dir(writer, g)
-    SmallZarrGroups.closewriter(writer)
+    SmallZarrGroups.save_zip(io, g)
     take!(io)
 end
 
 function unzip_group(data::Vector{UInt8})::ZGroup
-    SmallZarrGroups.load_dir(SmallZarrGroups.ZarrZipReader(data))
+    SmallZarrGroups.load_zip(data)
 end
 
 
