@@ -40,7 +40,7 @@ These functions can also use the default random number generator, this will auto
 At the end of `main.jl` there should be the lines:
 ```julia
 if abspath(PROGRAM_FILE) == @__FILE__
-    MEDYANSimRunner.run_sim(ARGS; jobs, setup, loop, load_snapshot, save_snapshot, done)
+    MEDYANSimRunner.run(ARGS; jobs, setup, loop, load, save, done)
 end
 ```
 
@@ -59,16 +59,16 @@ The `job` string is also used to seed the default RNG right before `setup` is ca
 
 #### `setup(job::String; kwargs...) -> header_dict, state`
 Return the header dictionary to be written as the `header.json` file in output trajectory.
-Also return the state that gets passed on to `loop` and the state that gets passed to `save_snapshot` and `load_snapshot`.
+Also return the state that gets passed on to `loop` and the state that gets passed to `save` and `load`.
 
 `job::String`: The job. This is used for multi job simulations.
 
-#### `save_snapshot(step::Int, state; kwargs...)-> group::SmallZarrGroups.ZGroup`
+#### `save(step::Int, state; kwargs...)-> group::SmallZarrGroups.ZGroup`
 Return the state of the system as a `SmallZarrGroups.ZGroup`
 This function should not mutate `state`
 
-#### `load_snapshot(step::Int, group::SmallZarrGroups.ZGroup, state; kwargs...) -> state`
-Load the state saved by `save_snapshot`
+#### `load(step::Int, group::SmallZarrGroups.ZGroup, state; kwargs...) -> state`
+Load the state saved by `save`
 This function can mutate `state`.
 `state` may be the state returned from `setup` or the `state` returned by `loop`.
 This function should return the same output if `state` is the state returned by `loop` or the 
@@ -82,7 +82,7 @@ Also return the expected value of step when done will first be true, used for di
 This function should not mutate `state`
 
 #### `loop(step::Int, state; kwargs...) -> state`
-Return the state that gets passed to `save_snapshot`
+Return the state that gets passed to `save`
 
 
 ### Main loop pseudo code
@@ -95,13 +95,13 @@ Random.seed!(collect(reinterpret(UInt64, sha256(job))))
 job_header, state =  setup(job)
 save job_header
 step = 0
-SmallZarrGroups.save_zip(snapshot_zip_file, save_snapshot(step, state))
-state = load_snapshot(step, SmallZarrGroups.load_zip(snapshot_zip_file), state)
+SmallZarrGroups.save_zip(snapshot_zip_file, save(step, state))
+state = load(step, SmallZarrGroups.load_zip(snapshot_zip_file), state)
 while true
     state = loop(step, state)
     step = step + 1
-    SmallZarrGroups.save_zip(snapshot_zip_file, save_snapshot(step, state))
-    state = load_snapshot(step, SmallZarrGroups.load_zip(snapshot_zip_file), state)
+    SmallZarrGroups.save_zip(snapshot_zip_file, save(step, state))
+    state = load(step, SmallZarrGroups.load_zip(snapshot_zip_file), state)
     if done(step::Int, state)[1]
         break
     end
