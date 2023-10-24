@@ -95,24 +95,23 @@ end
 end
 
 @testset "deprecated full run example" begin
-        test_out = joinpath(@__DIR__, "example/output/deprecated-full")
-        rm(test_out; force=true, recursive=true)
-        args = ["--out=$test_out","--batch=1"]
-        with_logger(warn_only_logger) do
-            MEDYANSimRunner.run_sim(args;
-                UserCode.jobs,
-                UserCode.setup,
-                save_snapshot=UserCode.save,
-                load_snapshot=UserCode.load,
-                UserCode.loop,
-                UserCode.done,
-            )
-        end
-        out_diff = sprint(MEDYANSimRunner.print_traj_diff, joinpath(ref_out,"a"), joinpath(test_out,"a"))
-        if !isempty(out_diff)
-            println(out_diff)
-            @test false
-        end
+    test_out = joinpath(@__DIR__, "example/output/deprecated-full")
+    rm(test_out; force=true, recursive=true)
+    args = ["--out=$test_out","--batch=1"]
+    with_logger(warn_only_logger) do
+        MEDYANSimRunner.run_sim(args;
+            UserCode.jobs,
+            UserCode.setup,
+            save_snapshot=UserCode.save,
+            load_snapshot=UserCode.load,
+            UserCode.loop,
+            UserCode.done,
+        )
+    end
+    out_diff = sprint(MEDYANSimRunner.print_traj_diff, joinpath(ref_out,"a"), joinpath(test_out,"a"))
+    if !isempty(out_diff)
+        println(out_diff)
+        @test false
     end
 end
 end
