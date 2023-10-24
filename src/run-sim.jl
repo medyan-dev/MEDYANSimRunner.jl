@@ -115,6 +115,8 @@ function run(cli_args;
     return
 end
 
+@deprecate run_sim(cli_args; jobs::Vector{String}, save_snapshot, load_snapshot, kwargs...) run(cli_args; save=save_snapshot, load=load_snapshot, kwargs...) false
+
 
 function start_job(out_dir, job::String;
         setup,
