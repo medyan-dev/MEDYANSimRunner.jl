@@ -25,7 +25,7 @@ function get_version_string()
 end
 
 """
-    run_sim(ARGS; setup, loop, load_snapshot, save_snapshot, done)
+    run(ARGS; setup, loop, load, save, done)
 
 This function should be called at the end of a script to run a simulation.
 It takes keyword arguments:
@@ -41,10 +41,10 @@ is called once at the beginning of the simulation.
  - `loop(step::Int, state; kwargs...) -> state`
 is called once per step of the simulation.
 
-- `save_snapshot(step::Int, state; kwargs...) -> group::SmallZarrGroups.ZGroup`
+- `save(step::Int, state; kwargs...) -> group::SmallZarrGroups.ZGroup`
 is called to save a snapshot.
 
- - `load_snapshot(step::Int, group::SmallZarrGroups.ZGroup, state; kwargs...) -> state`
+ - `load(step::Int, group::SmallZarrGroups.ZGroup, state; kwargs...) -> state`
 is called to load a snapshot.
 
  - `done(step::Int, state; kwargs...) -> done::Bool, expected_final_step::Int`
@@ -54,12 +54,12 @@ is called to check if the simulation is done.
 
 $(CLI_HELP)
 """
-function run_sim(cli_args;
+function run(cli_args;
         jobs::Vector{String},
         setup,
         loop,
-        save_snapshot,
-        load_snapshot,
+        save,
+        load,
         done,
         kwargs...
     )
@@ -78,16 +78,16 @@ function run_sim(cli_args;
                 continue_job(options.out_dir, job;
                     setup,
                     loop,
-                    save_snapshot,
-                    load_snapshot,
+                    save,
+                    load,
                     done,
                 )
             else
                 start_job(options.out_dir, job;
                     setup,
                     loop,
-                    save_snapshot,
-                    load_snapshot,
+                    save,
+                    load,
                     done,
                 )
             end
@@ -98,16 +98,16 @@ function run_sim(cli_args;
             continue_job(options.out_dir, job;
                 setup,
                 loop,
-                save_snapshot,
-                load_snapshot,
+                save,
+                load,
                 done,
             )
         else
             start_job(options.out_dir, job;
                 setup,
                 loop,
-                save_snapshot,
-                load_snapshot,
+                save,
+                load,
                 done,
             )
         end
@@ -119,8 +119,8 @@ end
 function start_job(out_dir, job::String;
         setup,
         loop,
-        save_snapshot,
-        load_snapshot,
+        save,
+        load,
         done,
     )
     basic_name_check.(String.(split(job, '/'; keepempty=true)))
@@ -148,7 +148,7 @@ function start_job(out_dir, job::String;
             write_traj_file(traj, "header.json", codeunits(header_str))
             local step::Int = 0
 
-            state, prev_sha256 = save_load_state!(rng_state, step, state, traj, save_snapshot, load_snapshot, prev_sha256)
+            state, prev_sha256 = save_load_state!(rng_state, step, state, traj, save, load, prev_sha256)
             @info "Simulation started."
             while true
                 copy!(Random.default_rng(), rng_state)
@@ -156,7 +156,7 @@ function start_job(out_dir, job::String;
                 copy!(rng_state, Random.default_rng())
 
                 step += 1
-                state, prev_sha256 = save_load_state!(rng_state, step, state, traj, save_snapshot, load_snapshot, prev_sha256)
+                state, prev_sha256 = save_load_state!(rng_state, step, state, traj, save, load, prev_sha256)
 
                 copy!(Random.default_rng(), rng_state)
                 isdone::Bool, expected_final_step::Int64 = done(step::Int, state)
@@ -177,8 +177,8 @@ end
 function continue_job(out_dir, job;
         setup,
         loop,
-        save_snapshot,
-        load_snapshot,
+        save,
+        load,
         done,
     )
     basic_name_check.(String.(split(job, '/'; keepempty=true)))
@@ -232,7 +232,7 @@ function continue_job(out_dir, job;
                 prev_sha256 = bytes2hex(sha256(header_str))
                 write_traj_file(traj, "header.json", codeunits(header_str))
                 step = 0
-                state, prev_sha256 = save_load_state!(rng_state, step, state, traj, save_snapshot, load_snapshot, prev_sha256)
+                state, prev_sha256 = save_load_state!(rng_state, step, state, traj, save, load, prev_sha256)
                 @info "Simulation started."
             else
                 @info "Continuing simulation from step $(step)."
@@ -241,7 +241,7 @@ function continue_job(out_dir, job;
                 reread_sub_snapshot_group = snapshot_group["snap"]
                 rng_state = str_2_rng(attrs(snapshot_group)["rng_state"])
                 copy!(Random.default_rng(), rng_state)
-                state = load_snapshot(step, reread_sub_snapshot_group, state)
+                state = load(step, reread_sub_snapshot_group, state)
                 copy!(rng_state, Random.default_rng())
                 prev_sha256 = bytes2hex(sha256(snapshot_data))
                 if step > 0
@@ -262,7 +262,7 @@ function continue_job(out_dir, job;
                 copy!(rng_state, Random.default_rng())
 
                 step += 1
-                state, prev_sha256 = save_load_state!(rng_state, step, state, traj, save_snapshot, load_snapshot, prev_sha256)
+                state, prev_sha256 = save_load_state!(rng_state, step, state, traj, save, load, prev_sha256)
 
                 copy!(Random.default_rng(), rng_state)
                 isdone, expected_final_step = done(step::Int, state)
@@ -286,14 +286,14 @@ function save_load_state!(
         step::Int,
         state,
         traj::String,
-        save_snapshot,
-        load_snapshot,
+        save,
+        load,
         prev_sha256::String,
     )
     snapshot_group = ZGroup()
 
     copy!(Random.default_rng(), rng_state)
-    sub_snapshot_group = save_snapshot(step, state)
+    sub_snapshot_group = save(step, state)
     copy!(rng_state, Random.default_rng())
 
     snapshot_group["snap"] = sub_snapshot_group
@@ -304,7 +304,7 @@ function save_load_state!(
     reread_sub_snapshot_group = unzip_group(snapshot_data)["snap"]
 
     copy!(Random.default_rng(), rng_state)
-    state = load_snapshot(step, reread_sub_snapshot_group, state)
+    state = load(step, reread_sub_snapshot_group, state)
     copy!(rng_state, Random.default_rng())
 
     write_traj_file(traj, SNAP_PREFIX*string(step)*SNAP_POSTFIX, snapshot_data)

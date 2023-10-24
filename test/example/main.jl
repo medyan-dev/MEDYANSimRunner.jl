@@ -28,14 +28,14 @@ function setup(job::String; kwargs...)
     header, state
 end
 
-function save_snapshot(step::Int, state; kwargs...)::ZGroup
+function save(step::Int, state; kwargs...)::ZGroup
     # @info "saving states" state
     group = ZGroup()
     group["states"] = state
     group
 end
 
-function load_snapshot(step::Int, group, state; kwargs...)
+function load(step::Int, group, state; kwargs...)
     state .= collect(group["states"])
     state
 end
@@ -52,5 +52,5 @@ function loop(step::Int, state; kwargs...)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    MEDYANSimRunner.run_sim(ARGS; jobs, setup, loop, load_snapshot, save_snapshot, done)
+    MEDYANSimRunner.run(ARGS; jobs, setup, loop, load, save, done)
 end

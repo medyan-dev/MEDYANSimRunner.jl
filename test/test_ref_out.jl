@@ -27,11 +27,11 @@ warn_only_logger = MinLevelLogger(current_logger(), Logging.Warn);
         args = ["--out=$test_out","--batch=1"]
         continue_sim && push!(args,"--continue")
         with_logger(warn_only_logger) do
-            MEDYANSimRunner.run_sim(args;
+            MEDYANSimRunner.run(args;
                 UserCode.jobs,
                 UserCode.setup,
-                UserCode.save_snapshot,
-                UserCode.load_snapshot,
+                UserCode.save,
+                UserCode.load,
                 UserCode.loop,
                 UserCode.done,
             )
@@ -77,11 +77,11 @@ end
         args = ["--out=$test_out","--batch=1"]
         continue_sim && push!(args,"--continue")
         with_logger(warn_only_logger) do
-            MEDYANSimRunner.run_sim(args;
+            MEDYANSimRunner.run(args;
                 UserCode.jobs,
                 UserCode.setup,
-                UserCode.save_snapshot,
-                UserCode.load_snapshot,
+                UserCode.save,
+                UserCode.load,
                 UserCode.loop,
                 UserCode.done,
             )
