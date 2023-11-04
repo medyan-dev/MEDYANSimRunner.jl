@@ -12,7 +12,7 @@ module UserCode
 end
 @testset "reference output" begin
 
-ref_out = if VERSION >= v"1.10"
+ref_out = if VERSION >= v"1.10.0-rc1"
     joinpath(@__DIR__, "example/output-ref-1_10")
 else
     joinpath(@__DIR__, "example/output-ref-1_9")
