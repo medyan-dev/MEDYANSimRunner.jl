@@ -1,38 +1,38 @@
-┌ Info: 2023-11-03T23:04:23 Starting new job.
+┌ Info: 2023-11-28T16:49:15 Starting new job.
 └ @ MEDYANSimRunner /home/nathan/juliadev/MEDYANSimRunner/src/run-sim.jl:133
-┌ Info: 2023-11-03T23:04:23 Julia Version: 1.10.0-rc1
-│ MEDYANSimRunner Version: 0.5.0
+┌ Info: 2023-11-28T16:49:15 Julia Version: 1.9.4
+│ MEDYANSimRunner Version: 0.5.2
 │ OS: Linux (x86_64-linux-gnu)
-│ CPU: AMD Ryzen 7 3700X 8-Core Processor
+│ CPU: Intel(R) Core(TM) i7-10700KF CPU @ 3.80GHz
 │ WORD_SIZE: 64
-│ LLVM: libLLVM-15.0.7 (ORCJIT znver2)
+│ LLVM: libLLVM-14.0.6 (ORCJIT skylake)
 │ Threads: 1 on 16 virtual cores
 └ @ MEDYANSimRunner /home/nathan/juliadev/MEDYANSimRunner/src/run-sim.jl:134
-┌ Info: 2023-11-03T23:04:23 Setup complete.
+┌ Info: 2023-11-28T16:49:15 Setup complete.
 └ @ MEDYANSimRunner /home/nathan/juliadev/MEDYANSimRunner/src/run-sim.jl:145
-┌ Info: 2023-11-03T23:04:23 Simulation started.
+┌ Info: 2023-11-28T16:49:15 Simulation started.
 └ @ MEDYANSimRunner /home/nathan/juliadev/MEDYANSimRunner/src/run-sim.jl:154
-┌ Info: 2023-11-03T23:04:23 step 1 of 11 done
+┌ Info: 2023-11-28T16:49:15 step 1 of 11 done
 └ @ MEDYANSimRunner /home/nathan/juliadev/MEDYANSimRunner/src/run-sim.jl:167
-┌ Info: 2023-11-03T23:04:23 step 2 of 11 done
+┌ Info: 2023-11-28T16:49:15 step 2 of 11 done
 └ @ MEDYANSimRunner /home/nathan/juliadev/MEDYANSimRunner/src/run-sim.jl:167
-┌ Info: 2023-11-03T23:04:23 step 3 of 11 done
+┌ Info: 2023-11-28T16:49:15 step 3 of 11 done
 └ @ MEDYANSimRunner /home/nathan/juliadev/MEDYANSimRunner/src/run-sim.jl:167
-┌ Info: 2023-11-03T23:04:23 step 4 of 11 done
+┌ Info: 2023-11-28T16:49:15 step 4 of 11 done
 └ @ MEDYANSimRunner /home/nathan/juliadev/MEDYANSimRunner/src/run-sim.jl:167
-┌ Info: 2023-11-03T23:04:23 step 5 of 11 done
+┌ Info: 2023-11-28T16:49:15 step 5 of 11 done
 └ @ MEDYANSimRunner /home/nathan/juliadev/MEDYANSimRunner/src/run-sim.jl:167
-┌ Info: 2023-11-03T23:04:23 step 6 of 11 done
+┌ Info: 2023-11-28T16:49:15 step 6 of 11 done
 └ @ MEDYANSimRunner /home/nathan/juliadev/MEDYANSimRunner/src/run-sim.jl:167
-┌ Info: 2023-11-03T23:04:23 step 7 of 11 done
+┌ Info: 2023-11-28T16:49:15 step 7 of 11 done
 └ @ MEDYANSimRunner /home/nathan/juliadev/MEDYANSimRunner/src/run-sim.jl:167
-┌ Info: 2023-11-03T23:04:23 step 8 of 11 done
+┌ Info: 2023-11-28T16:49:15 step 8 of 11 done
 └ @ MEDYANSimRunner /home/nathan/juliadev/MEDYANSimRunner/src/run-sim.jl:167
-┌ Info: 2023-11-03T23:04:23 step 9 of 11 done
+┌ Info: 2023-11-28T16:49:15 step 9 of 11 done
 └ @ MEDYANSimRunner /home/nathan/juliadev/MEDYANSimRunner/src/run-sim.jl:167
-┌ Info: 2023-11-03T23:04:23 step 10 of 11 done
+┌ Info: 2023-11-28T16:49:15 step 10 of 11 done
 └ @ MEDYANSimRunner /home/nathan/juliadev/MEDYANSimRunner/src/run-sim.jl:167
-┌ Info: 2023-11-03T23:04:23 step 11 of 11 done
+┌ Info: 2023-11-28T16:49:15 step 11 of 11 done
 └ @ MEDYANSimRunner /home/nathan/juliadev/MEDYANSimRunner/src/run-sim.jl:167
-┌ Info: 2023-11-03T23:04:23 Simulation completed.
+┌ Info: 2023-11-28T16:49:15 Simulation completed.
 └ @ MEDYANSimRunner /home/nathan/juliadev/MEDYANSimRunner/src/run-sim.jl:325
