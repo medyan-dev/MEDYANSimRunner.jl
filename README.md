@@ -85,7 +85,7 @@ This function should not mutate `state`
 Return the state that gets passed to `save` and `load`
 
 Optionally, mutate the `output` keyword argument.
-When saving the snapshot, this group will get saved as `"/out"`
+When saving the snapshot, this group will get saved as `"out"`
 
 
 ### Main loop pseudo code
