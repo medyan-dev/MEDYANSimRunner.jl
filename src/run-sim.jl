@@ -153,12 +153,13 @@ function start_job(out_dir, job::String;
             state, prev_sha256 = save_load_state!(rng_state, step, state, traj, save, load, prev_sha256)
             @info "Simulation started."
             while true
+                output = ZGroup()
                 copy!(Random.default_rng(), rng_state)
-                state = loop(step, state)
+                state = loop(step, state; output)
                 copy!(rng_state, Random.default_rng())
 
                 step += 1
-                state, prev_sha256 = save_load_state!(rng_state, step, state, traj, save, load, prev_sha256)
+                state, prev_sha256 = save_load_state!(rng_state, step, state, traj, save, load, prev_sha256, output)
 
                 copy!(Random.default_rng(), rng_state)
                 isdone::Bool, expected_final_step::Int64 = done(step::Int, state)
@@ -259,12 +260,13 @@ function continue_job(out_dir, job;
                 end
             end
             while true
+                output = ZGroup()
                 copy!(Random.default_rng(), rng_state)
-                state = loop(step, state)
+                state = loop(step, state; output)
                 copy!(rng_state, Random.default_rng())
 
                 step += 1
-                state, prev_sha256 = save_load_state!(rng_state, step, state, traj, save, load, prev_sha256)
+                state, prev_sha256 = save_load_state!(rng_state, step, state, traj, save, load, prev_sha256, output)
 
                 copy!(Random.default_rng(), rng_state)
                 isdone, expected_final_step = done(step::Int, state)
@@ -291,6 +293,7 @@ function save_load_state!(
         save,
         load,
         prev_sha256::String,
+        output::Union{Nothing, ZGroup}=nothing,
     )
     snapshot_group = ZGroup()
 
@@ -299,6 +302,9 @@ function save_load_state!(
     copy!(rng_state, Random.default_rng())
 
     snapshot_group["snap"] = sub_snapshot_group
+    if !isnothing(output)
+        snapshot_group["out"] = output
+    end
     attrs(snapshot_group)["rng_state"] = rng_2_str(rng_state)
     attrs(snapshot_group)["step"] = step
     attrs(snapshot_group)["prev_sha256"] = prev_sha256

@@ -81,8 +81,11 @@ Also return the expected value of step when done will first be true, used for di
 
 This function should not mutate `state`
 
-#### `loop(step::Int, state; kwargs...) -> state`
-Return the state that gets passed to `save`
+#### `loop(step::Int, state; output::SmallZarrGroups.ZGroup, kwargs...) -> state`
+Return the state that gets passed to `save` and `load`
+
+Optionally, mutate the `output` keyword argument.
+When saving the snapshot, this group will get saved as `"out"`
 
 
 ### Main loop pseudo code
@@ -99,9 +102,10 @@ group = ZGroup(childern=Dict("snap" => save(step, state))
 SmallZarrGroups.save_zip(snapshot_zip_file, group)
 state = load(step, SmallZarrGroups.load_zip(snapshot_zip_file)["snap"], state)
 while true
-    state = loop(step, state)
+    output = ZGroup()
+    state = loop(step, state; output)
     step = step + 1
-    group = ZGroup(childern=Dict("snap" => save(step, state))
+    group = ZGroup(childern=Dict("snap"=>save(step, state), "out"=>output)
     SmallZarrGroups.save_zip(snapshot_zip_file, group)
     state = load(step, SmallZarrGroups.load_zip(snapshot_zip_file)["snap"], state)
     if done(step::Int, state)[1]
