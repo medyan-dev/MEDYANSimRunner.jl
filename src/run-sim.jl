@@ -337,8 +337,11 @@ function zip_group(g::ZGroup)::Vector{UInt8}
     take!(io)
 end
 
+# ignores the top level "out" group
 function unzip_group(data::Vector{UInt8})::ZGroup
-    SmallZarrGroups.load_zip(data)
+    SmallZarrGroups.load_zip(data;
+        predicate=!startswith("out/"),
+    )
 end
 
 
