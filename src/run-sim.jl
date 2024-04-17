@@ -130,7 +130,7 @@ function start_job(out_dir, job::String;
     job_out = mkpath(joinpath(abspath(out_dir), job))
     in_new_log_dir(job_out) do
         FileWatching.Pidfile.mkpidlock(joinpath(job_out,"traj.lock"); wait=false) do
-            @info "Starting new job."
+            @info "Starting new job." job out_dir
             @info get_version_string()
 
             # remove old snapshot data
@@ -189,7 +189,7 @@ function continue_job(out_dir, job;
     job_out = mkpath(joinpath(abspath(out_dir), job))
     traj = mkpath(joinpath(job_out, "traj"))
     in_new_log_dir(job_out) do
-        @info "Continuing job."
+        @info "Continuing job." job out_dir
         @info get_version_string()
         pidlock = try
             FileWatching.Pidfile.mkpidlock(joinpath(job_out,"traj.lock"); wait=false)
