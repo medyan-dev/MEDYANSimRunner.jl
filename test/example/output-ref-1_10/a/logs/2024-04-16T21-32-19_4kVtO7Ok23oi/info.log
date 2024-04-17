@@ -1,0 +1,38 @@
+┌ Info: 2024-04-16T21:32:19 Starting new job.
+└ @ MEDYANSimRunner /home/nathan/juliadev/MEDYANSimRunner/src/run-sim.jl:133
+┌ Info: 2024-04-16T21:32:19 Julia Version: 1.10.2
+│ MEDYANSimRunner Version: 0.5.4
+│ OS: Linux (x86_64-linux-gnu)
+│ CPU: AMD Ryzen 7 7800X3D 8-Core Processor
+│ WORD_SIZE: 64
+│ LLVM: libLLVM-15.0.7 (ORCJIT znver3)
+│ Threads: 1 on 16 virtual cores
+└ @ MEDYANSimRunner /home/nathan/juliadev/MEDYANSimRunner/src/run-sim.jl:134
+┌ Info: 2024-04-16T21:32:19 Setup complete.
+└ @ MEDYANSimRunner /home/nathan/juliadev/MEDYANSimRunner/src/run-sim.jl:145
+┌ Info: 2024-04-16T21:32:19 Simulation started.
+└ @ MEDYANSimRunner /home/nathan/juliadev/MEDYANSimRunner/src/run-sim.jl:154
+┌ Info: 2024-04-16T21:32:19 step 1 of 11 done
+└ @ MEDYANSimRunner /home/nathan/juliadev/MEDYANSimRunner/src/run-sim.jl:168
+┌ Info: 2024-04-16T21:32:19 step 2 of 11 done
+└ @ MEDYANSimRunner /home/nathan/juliadev/MEDYANSimRunner/src/run-sim.jl:168
+┌ Info: 2024-04-16T21:32:19 step 3 of 11 done
+└ @ MEDYANSimRunner /home/nathan/juliadev/MEDYANSimRunner/src/run-sim.jl:168
+┌ Info: 2024-04-16T21:32:19 step 4 of 11 done
+└ @ MEDYANSimRunner /home/nathan/juliadev/MEDYANSimRunner/src/run-sim.jl:168
+┌ Info: 2024-04-16T21:32:19 step 5 of 11 done
+└ @ MEDYANSimRunner /home/nathan/juliadev/MEDYANSimRunner/src/run-sim.jl:168
+┌ Info: 2024-04-16T21:32:19 step 6 of 11 done
+└ @ MEDYANSimRunner /home/nathan/juliadev/MEDYANSimRunner/src/run-sim.jl:168
+┌ Info: 2024-04-16T21:32:19 step 7 of 11 done
+└ @ MEDYANSimRunner /home/nathan/juliadev/MEDYANSimRunner/src/run-sim.jl:168
+┌ Info: 2024-04-16T21:32:19 step 8 of 11 done
+└ @ MEDYANSimRunner /home/nathan/juliadev/MEDYANSimRunner/src/run-sim.jl:168
+┌ Info: 2024-04-16T21:32:19 step 9 of 11 done
+└ @ MEDYANSimRunner /home/nathan/juliadev/MEDYANSimRunner/src/run-sim.jl:168
+┌ Info: 2024-04-16T21:32:19 step 10 of 11 done
+└ @ MEDYANSimRunner /home/nathan/juliadev/MEDYANSimRunner/src/run-sim.jl:168
+┌ Info: 2024-04-16T21:32:19 step 11 of 11 done
+└ @ MEDYANSimRunner /home/nathan/juliadev/MEDYANSimRunner/src/run-sim.jl:168
+┌ Info: 2024-04-16T21:32:19 Simulation completed.
+└ @ MEDYANSimRunner /home/nathan/juliadev/MEDYANSimRunner/src/run-sim.jl:331
