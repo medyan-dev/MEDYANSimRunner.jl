@@ -16,13 +16,13 @@ const CLI_HELP = (
                             This directory will be created if it does not exist.
                             Defaults to the current working directory.
 
-        --batch=<job index>   Run just one of the jobs.
+        --batch=<job index> Run just one of the jobs.
                             By default all jobs will run.
 
-        --continue          Try to continue from existing snapshots
-                            in the output. By default, existing snapshots will
-                            be deleted, and the simulation will start from
-                            scratch.
+        --continue          Try to continue from existing trajectories
+                            in the output.
+                            By default existing trajectories will be deleted
+                            and the jobs will start from scratch.
 
         --help              Print out this message.
     """
