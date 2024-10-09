@@ -12,10 +12,10 @@ module UserCode
 end
 @testset "reference output" begin
 
-ref_out = if VERSION >= v"1.10.0-rc1"
+ref_out = if VERSION >= v"1.10"
     joinpath(@__DIR__, "example/output-ref-1_10")
 else
-    joinpath(@__DIR__, "example/output-ref-1_9")
+    error("Julia version $(VERSION) isn't supported")
 end
 warn_only_logger = MinLevelLogger(current_logger(), Logging.Warn);
 
