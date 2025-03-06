@@ -1,10 +1,10 @@
 """
     step_path(step::Int)::String
 
-    Return the relative path where the snapshot after `step` is in the "traj" directory.
+Return the relative path where the snapshot for `step` is in the "traj" directory.
 """
 function step_path(step::Int)::String
-    step ≥ 0 || error("step must be positive. Got: $(step)")
+    @argcheck step ≥ 0
     string(fld(step, 10^SUBDIR_PAD)) * "/" * string(mod(step, 10^SUBDIR_PAD); pad=SUBDIR_PAD) * SNAP_POSTFIX
 end
 
@@ -20,7 +20,7 @@ end
 function is_valid_superpath(x::AbstractString)
     (
         all(isdigit, x) &&
-        ncodeunits(x) ≤ 12 &&
+        ncodeunits(x) ∈ 1:12 &&
         (x[begin] != '0' || isone(ncodeunits(x)))
     )
 end
@@ -49,6 +49,11 @@ function status_traj_dir(traj::String)::Union{Symbol, Int}
     end
 end
 
+"""
+    steps_traj_dir(traj::String)::Vector{Int}
+
+Return the snapshot steps in order from low to high that are found in the `traj` directory.
+"""
 function steps_traj_dir(traj::String)::Vector{Int}
     dirs = readdir(traj)
     steps = Int[]
