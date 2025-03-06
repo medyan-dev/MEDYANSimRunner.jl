@@ -40,6 +40,7 @@ example_output = joinpath(@__DIR__, "example/output")
         @test false
     end
     @test MEDYANSimRunner.steps_traj_dir(joinpath(example_output, "start", "a", "traj")) == 0:3001
+    @test read(joinpath(example_output, "start", "a", "traj", "footer.json")) == read(joinpath(@__DIR__, "example/output-ref-1_11", "a", "traj", "footer.json"))
 end
 
 ref_out = joinpath(example_output, "start")
