@@ -43,7 +43,7 @@ example_output = joinpath(@__DIR__, "example/output")
 end
 
 ref_out = joinpath(example_output, "start")
-@testset "partial restart example $v" for i in 1:11
+@testset "partial restart example $i" for i in 1:11
     for continue_sim in (true,false)
         test_out = joinpath(@__DIR__, "example/output/restart $i",continue_sim ? "conti" : "start")
         mkpath(test_out)
