@@ -153,10 +153,10 @@ function start_job(out_dir, job::String;
             while true
                 output = ZGroup()
                 copy!(Random.default_rng(), rng_state)
+                step += 1
                 state = loop(step, state; output)
                 copy!(rng_state, Random.default_rng())
 
-                step += 1
                 state, prev_sha256 = save_load_state!(rng_state, step, state, traj, save, load, prev_sha256, output)
 
                 copy!(Random.default_rng(), rng_state)
@@ -244,10 +244,10 @@ function continue_job(out_dir, job;
             while true
                 output = ZGroup()
                 copy!(Random.default_rng(), rng_state)
+                step += 1
                 state = loop(step, state; output)
                 copy!(rng_state, Random.default_rng())
 
-                step += 1
                 state, prev_sha256 = save_load_state!(rng_state, step, state, traj, save, load, prev_sha256, output)
 
                 copy!(Random.default_rng(), rng_state)
