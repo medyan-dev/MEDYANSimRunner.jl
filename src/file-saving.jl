@@ -60,7 +60,6 @@ function write_traj_file(
         file_name::String,
         data::AbstractVector{UInt8},
     )::Nothing
-    basic_name_check(file_name)
     new_hash = sha256(data)
     file_path = joinpath(dir_name, file_name)
     if isfile(file_path)

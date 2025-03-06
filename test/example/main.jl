@@ -41,7 +41,7 @@ function load(step::Int, group, state; kwargs...)
 end
 
 function done(step::Int, state; kwargs...)
-    step > 10, 11
+    step > 3000, 3001
 end
 
 function loop(step::Int, state; output::ZGroup, kwargs...)
