@@ -41,14 +41,14 @@ function load(step::Int, group, state; kwargs...)
 end
 
 function done(step::Int, state; kwargs...)
-    step > 10, 11
+    step > 3000, 3001
 end
 
 function loop(step::Int, state; output::ZGroup, kwargs...)
     a = sum(state) + rand(0:1)
     state[1] = state[2]
     state[2] = a
-    attrs(output)["sum"] = sum(state)
+    attrs(output)["sum"] = sum(state) + step
     state
 end
 

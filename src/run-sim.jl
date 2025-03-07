@@ -115,8 +115,6 @@ function run(cli_args;
     return
 end
 
-@deprecate run_sim(cli_args;save_snapshot, load_snapshot, kwargs...) run(cli_args; save=save_snapshot, load=load_snapshot, kwargs...) false
-
 
 function start_job(out_dir, job::String;
         setup,
@@ -155,10 +153,10 @@ function start_job(out_dir, job::String;
             while true
                 output = ZGroup()
                 copy!(Random.default_rng(), rng_state)
+                step += 1
                 state = loop(step, state; output)
                 copy!(rng_state, Random.default_rng())
 
-                step += 1
                 state, prev_sha256 = save_load_state!(rng_state, step, state, traj, save, load, prev_sha256, output)
 
                 copy!(Random.default_rng(), rng_state)
@@ -200,28 +198,12 @@ function continue_job(out_dir, job;
         end
         try
             # Figure out what step to continue from
-            snaps = readdir(traj)
-            if "footer.json" ∈ snaps
+            status = status_traj_dir(traj)
+            if status == :done
                 @info "Simulation already finished, exiting."
                 return
             end
-            local step::Int = if "header.json" ∈ snaps
-                local steps = Int64[]
-                for file_name in snaps
-                    isascii(file_name) || continue
-                    startswith(file_name, SNAP_PREFIX) || continue
-                    endswith(file_name, SNAP_POSTFIX) || continue
-                    ncodeunits(file_name) > ncodeunits(SNAP_PREFIX) + ncodeunits(SNAP_POSTFIX)
-                    local step_part = file_name[begin+ncodeunits(SNAP_PREFIX):end-ncodeunits(SNAP_POSTFIX)]
-                    local step_maybe = tryparse(Int, step_part)
-                    if !isnothing(step_maybe)
-                        push!(steps, step_maybe)
-                    end
-                end
-                maximum(steps; init=-1)
-            else
-                -2
-            end
+            step::Int = status
             @info "Setting up simulation."
             rng_state = Random.Xoshiro(reinterpret(UInt64, sha256(job))...)
             copy!(Random.default_rng(), rng_state)
@@ -239,7 +221,7 @@ function continue_job(out_dir, job;
                 @info "Simulation started."
             else
                 @info "Continuing simulation from step $(step)."
-                snapshot_data = read(joinpath(traj, SNAP_PREFIX*string(step)*SNAP_POSTFIX))
+                snapshot_data = read(joinpath(traj, step_path(step)))
                 snapshot_group = unzip_group(snapshot_data)
                 reread_sub_snapshot_group = snapshot_group["snap"]
                 rng_state = str_2_rng(attrs(snapshot_group)["rng_state"])
@@ -262,10 +244,10 @@ function continue_job(out_dir, job;
             while true
                 output = ZGroup()
                 copy!(Random.default_rng(), rng_state)
+                step += 1
                 state = loop(step, state; output)
                 copy!(rng_state, Random.default_rng())
 
-                step += 1
                 state, prev_sha256 = save_load_state!(rng_state, step, state, traj, save, load, prev_sha256, output)
 
                 copy!(Random.default_rng(), rng_state)
@@ -315,7 +297,10 @@ function save_load_state!(
     state = load(step, reread_sub_snapshot_group, state)
     copy!(rng_state, Random.default_rng())
 
-    write_traj_file(traj, SNAP_PREFIX*string(step)*SNAP_POSTFIX, snapshot_data)
+    # avoid over 1000 files in a directory
+    sp = step_path(step)
+    mkpath(dirname(joinpath(traj, sp)))
+    write_traj_file(traj, sp, snapshot_data)
     state, bytes2hex(sha256(snapshot_data))
 end
 
