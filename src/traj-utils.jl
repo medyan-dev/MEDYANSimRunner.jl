@@ -2,6 +2,18 @@
     step_path(step::Int)::String
 
 Return the relative path where the snapshot for `step` is in the "traj" directory.
+
+# Examples
+```julia-repl
+julia> step_path(0)
+"0/000.zip"
+
+julia> step_path(1)
+"0/001.zip"
+
+julia> step_path(123456)
+"123/456.zip"
+```
 """
 function step_path(step::Int)::String
     @argcheck step ≥ 0
@@ -52,7 +64,36 @@ end
 """
     steps_traj_dir(traj::String)::Vector{Int}
 
-Return the snapshot steps in order from low to high that are found in the `traj` directory.
+Return the snapshot steps from low to high found in the `traj` directory.
+
+# Examples
+
+```sh
+.
+└── traj/
+    ├── 0/
+    │   ├── 000.zip
+    │   ├── 001.zip
+    │   ⋮
+    │   ├── 998.zip
+    │   └── 999.zip
+    ⋮
+    └── 3/
+        ├── 000.zip
+        └── 001.zip
+```
+
+```julia-repl
+julia> steps_traj_dir("traj")
+3002-element Vector{Int64}:
+    0
+    1
+    2
+    ⋮
+ 2999
+ 3000
+ 3001
+```
 """
 function steps_traj_dir(traj::String)::Vector{Int}
     dirs = readdir(traj)

@@ -123,7 +123,7 @@ end
 
 ## `output` directory
 
-The output directory has a subdirectory for each job's output. 
+The output directory has a subdirectory for each job's output.
 The job string is the name of the subdirectory.
 
 Each job's output subdirectory has the following files.
@@ -137,6 +137,8 @@ A description of the system.
 ### `traj/<i÷1000>/<i%1000 zero padded to 3 digits>.zip`
 Contains the snapshot at the end of the i'th step of the simulation.
 The state returned by `setup` is stored in `0/000.zip`
+The `step_path` function can be used to convert for example `123` to `"0/123.zip"`
+The `steps_traj_dir` function can be used to get the steps of snapshots in a `"traj"` directory.
 The user data is stored in the `"snap"` and `"out"` sub groups. The root group contains
 some metadata used by `MEDYANSimRunner`.
 
