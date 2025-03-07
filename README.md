@@ -51,7 +51,7 @@ end
 To run the simulation if `main.jl` is called as a julia script.
 
 #### Standard input parameters.
- - `step::Int`: starts out at 0 after setup and is auto incremented right before every `loop`.
+ - `step::Int`: starts out at 0 after setup and is incremented right before every call to `loop`.
 
 #### `jobs::Vector{String}`
 A vector of jobs to run. Each job represents one variant of the simulation that can be run.
