@@ -71,29 +71,9 @@ function run(cli_args;
         return
     end
     options::CLIOptions = something(maybe_options)
-    if options.batch == -1
-        # TODO run all jobs in parallel
-        for job in jobs
-            if options.continue_sim
-                continue_job(options.out_dir, job;
-                    setup,
-                    loop,
-                    save,
-                    load,
-                    done,
-                )
-            else
-                start_job(options.out_dir, job;
-                    setup,
-                    loop,
-                    save,
-                    load,
-                    done,
-                )
-            end
-        end
-    else
-        job = jobs[options.batch]
+    # TODO run all jobs in parallel
+    @info "Running $(length(options.batch_range)) jobs with indexes $(options.batch_range)"
+    for job in jobs[options.batch_range]
         if options.continue_sim
             continue_job(options.out_dir, job;
                 setup,
