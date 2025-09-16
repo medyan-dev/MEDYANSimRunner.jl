@@ -19,7 +19,7 @@ Pkg.add("MEDYANSimRunner")
 
 ## Warning: MEDYANSimRunner may be incompatible with a future release of Julia.
 
-Specifically `MEDYANSimRunner` uses `ccall` `:jl_fs_rename` and expects `copy(Random.default_rng())` to be `Xoshiro`. These are Julia internals.
+Specifically `MEDYANSimRunner` expects `copy(Random.default_rng())` to be `Xoshiro`. This is a Julia internal.
 
 ## Example
 Run the following in the root of this repo.
