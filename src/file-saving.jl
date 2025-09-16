@@ -78,21 +78,41 @@ function write_traj_file(
             error("short write of $(repr(file_name)) data")
         end
         close(temp_out)
-        # mv(temp_path, file_path; force=true)
-        err = ccall(:jl_fs_rename, Int32, (Cstring, Cstring), temp_path, file_path)
-        # on error, check if file was made by another process, and is still valid.
-        if err < 0
-            if isfile(file_path)
-                if filesize(file_path) == length(data)
-                    existing_hash = open(sha256, file_path)
-                    if new_hash == existing_hash
-                        # file exists and is correct, return
-                        return
+        # TODO Drop support for 1.11
+        @static if VERSION > v"1.12.0-rc"
+            try
+                Base.rename(temp_path, file_path)
+            catch err
+                err isa Base.IOError || rethrow()
+                # on error, check if file was made by another process, and is still valid.
+                if isfile(file_path)
+                    if filesize(file_path) == length(data)
+                        existing_hash = open(sha256, file_path)
+                        if new_hash == existing_hash
+                            # file exists and is correct, return
+                            return
+                        end
                     end
                 end
+                # otherwise error
+                error("$(repr(file_path)) is corrupted")
             end
-            # otherwise error
-            error("$(repr(file_path)) is corrupted")
+        else
+            err = ccall(:jl_fs_rename, Int32, (Cstring, Cstring), temp_path, file_path)
+            # on error, check if file was made by another process, and is still valid.
+            if err < 0
+                if isfile(file_path)
+                    if filesize(file_path) == length(data)
+                        existing_hash = open(sha256, file_path)
+                        if new_hash == existing_hash
+                            # file exists and is correct, return
+                            return
+                        end
+                    end
+                end
+                # otherwise error
+                error("$(repr(file_path)) is corrupted")
+            end
         end
         nothing
     end
