@@ -81,7 +81,7 @@ function parse_cli_args(cli_args, jobs::Vector{String})::Union{CLIOptions, Nothi
     else
         return batch_error()
     end::StepRange{Int, Int}
-    if !issubset(batch_range, 1:length(jobs)) 
+    if !issubset(batch_range, 1:length(jobs))
         @error "--batch must be a subset of $(1:length(jobs)), instead got $(batch_range)"
         return
     end

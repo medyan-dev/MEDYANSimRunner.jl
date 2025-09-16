@@ -72,6 +72,7 @@ function run(cli_args;
     end
     options::CLIOptions = something(maybe_options)
     # TODO run all jobs in parallel
+    @info "Running $(length(options.batch_range)) jobs with indexes $(options.batch_range)"
     for job in jobs[options.batch_range]
         if options.continue_sim
             continue_job(options.out_dir, job;
