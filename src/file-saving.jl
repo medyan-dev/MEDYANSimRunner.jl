@@ -94,7 +94,8 @@ function write_traj_file(
                         end
                     end
                 end
-                rethrow()
+                # otherwise error
+                error("$(repr(file_path)) is corrupted")
             end
         else
             err = ccall(:jl_fs_rename, Int32, (Cstring, Cstring), temp_path, file_path)

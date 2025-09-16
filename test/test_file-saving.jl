@@ -31,7 +31,7 @@ using MEDYANSimRunner
     # write file with existing dir
     mktempdir() do path
         mkdir(joinpath(path, "snap1.txt"))
-        @test_throws Exception MEDYANSimRunner.write_traj_file(path, "snap1.txt", [0x01, 0x02])
+        @test_throws ErrorException MEDYANSimRunner.write_traj_file(path, "snap1.txt", [0x01, 0x02])
         @test isdir(joinpath(path, "snap1.txt"))
         @test readdir(path) == ["snap1.txt"]
     end
