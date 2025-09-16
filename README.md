@@ -32,7 +32,8 @@ with the `test/` environment and store the output in `test/output/`.
 
 The output directory will be created if it doesn't already exist.
 
-If the `"--batch=<job index>"` option is not included, all jobs specified in `main.jl` will be run.
+If the `"--batch=<job index or range>"` option is not included, all jobs specified in `main.jl` will be run.
+`<job index or range>` can be a `:` delimited range for example `1:3:end` to run every third job.
 
 
 ### `main.jl` script
