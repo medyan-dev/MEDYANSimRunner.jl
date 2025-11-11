@@ -51,6 +51,40 @@ end
 
 To run the simulation if `main.jl` is called as a julia script.
 
+## Performance Profiling with ZoneProfilers
+
+MEDYANSimRunner integrates with [ZoneProfilers.jl](https://github.com/nhz2/ZoneProfilers.jl) to provide detailed performance instrumentation of your simulations. This allows you to visualize where time is spent in your `setup`, `loop`, `save`, `load`, and `done` functions, as well as in file I/O operations.
+
+### Using the Profiler
+
+To enable profiling, pass a profiler instance to the `run` function:
+
+```julia
+if abspath(PROGRAM_FILE) == @__FILE__
+    # Open and connect to the tracy GUI
+    using ZoneProfilerTracy: TracyProfiler
+    import TracyProfiler_jll
+    profiler = TracyProfiler(TracyProfiler_jll)
+    MEDYANSimRunner.run(ARGS; jobs, setup, loop, load, save, done, profiler)
+end
+```
+
+### Adding Custom Profiling
+
+You can add additional profiling zones within your user functions by using the `profiler` keyword argument:
+
+```julia
+function loop(step::Int, state; output, profiler=NullProfiler())
+    state = @zone profiler compute_physics(state)
+    @zone profiler collect_data!(output, state)
+    return state
+end
+```
+
+For production runs without profiling overhead, simply omit the `profiler` parameter (defaults to `NullProfiler()` which has zero runtime cost).
+
+See the [ZoneProfilers.jl documentation](https://github.com/nhz2/ZoneProfilers.jl) for more advanced profiling features.
+
 #### Standard input parameters.
  - `step::Int`: starts out at 0 after setup and is incremented right before every call to `loop`.
 

@@ -1,17 +1,3 @@
-import InteractiveUtils
-import LoggingExtras
-import JSON3
-using Logging
-import Dates
-using SHA: sha256
-using ArgCheck
-using SmallZarrGroups
-import Random
-import FileWatching
-import OrderedCollections
-
-
-
 function get_version_string()
     """
     Julia Version: $VERSION
@@ -24,8 +10,52 @@ function get_version_string()
     """
 end
 
+mutable struct RunState
+    rng_state::Random.Xoshiro
+    step::Int
+    state::Any
+    prev_sha256::String
+    traj::String
+end
+
+function init_run_state(;job, traj, setup, profiler)
+    rng_state = Random.Xoshiro(reinterpret(UInt64, sha256(job))...)
+
+    copy!(Random.default_rng(), rng_state)
+    job_header, state = @zone profiler setup(job; profiler)
+    copy!(rng_state, Random.default_rng())
+
+    header_str = sprint() do io
+        JSON3.pretty(io, job_header; allow_inf = true)
+    end
+    header_str, RunState(rng_state, 0, state, "", traj)
+end
+
+function do_a_step!(r::RunState; loop, load, save, done, profiler=NullProfiler())
+    output = ZGroup()
+    copy!(Random.default_rng(), r.rng_state)
+    r.step += 1
+    r.state = @zone profiler loop(r.step, r.state; output, profiler)
+    copy!(r.rng_state, Random.default_rng())
+
+    save_load_state!(r; save, load, output, profiler)
+
+    copy!(Random.default_rng(), r.rng_state)
+    isdone::Bool, expected_final_step::Int64 = @zone profiler done(r.step, r.state; profiler)
+    copy!(r.rng_state, Random.default_rng())
+
+    @info "step $step of $expected_final_step done"
+    frame_mark!(profiler)
+    if isdone
+        save_footer(r; profiler)
+        false
+    else
+        true
+    end
+end
+
 """
-    run(ARGS; setup, loop, load, save, done)
+    run(ARGS; setup, loop, load, save, done, profiler=NullProfiler())
 
 This function should be called at the end of a script to run a simulation.
 It takes keyword arguments:
@@ -50,6 +80,10 @@ is called to load a snapshot.
  - `done(step::Int, state; kwargs...) -> done::Bool, expected_final_step::Int`
 is called to check if the simulation is done.
 
+ - `profiler` (optional)
+is a ZoneProfilers profiler instance for performance instrumentation.
+Defaults to NullProfiler() for zero runtime overhead.
+
 `ARGS` is the command line arguments passed to the script.
 
 $(CLI_HELP)
@@ -61,6 +95,7 @@ function run(cli_args;
         save,
         load,
         done,
+        profiler=NullProfiler(),
         kwargs...
     )
     @nospecialize
@@ -71,6 +106,7 @@ function run(cli_args;
         return
     end
     options::CLIOptions = something(maybe_options)
+    app_info!(profiler, get_version_string())
     # TODO run all jobs in parallel
     @info "Running $(length(options.batch_range)) jobs with indexes $(options.batch_range)"
     for job in jobs[options.batch_range]
@@ -81,6 +117,7 @@ function run(cli_args;
                 save,
                 load,
                 done,
+                profiler,
             )
         else
             start_job(options.out_dir, job;
@@ -89,6 +126,7 @@ function run(cli_args;
                 save,
                 load,
                 done,
+                profiler,
             )
         end
     end
@@ -102,52 +140,24 @@ function start_job(out_dir, job::String;
         save,
         load,
         done,
+        profiler= NullProfiler(),
     )
     basic_name_check.(String.(split(job, '/'; keepempty=true)))
     # first set up logging
     job_out = mkpath(joinpath(abspath(out_dir), job))
     in_new_log_dir(job_out) do
         FileWatching.Pidfile.mkpidlock(joinpath(job_out,"traj.lock"); wait=false) do
+            message!(profiler, "Starting new job in $(repr(job_out))")
             @info "Starting new job." job out_dir
             @info get_version_string()
-
-            # remove old snapshot data
-            rm(joinpath(job_out, "traj"); recursive=true, force=true)
-            traj = mkpath(joinpath(job_out, "traj"))
-
-            rng_state = Random.Xoshiro(reinterpret(UInt64, sha256(job))...)
-            copy!(Random.default_rng(), rng_state)
-            job_header, state = setup(job)
-            copy!(rng_state, Random.default_rng())
-            
-            @info "Setup complete."
-            header_str = sprint() do io
-                JSON3.pretty(io, job_header; allow_inf = true)
+            @zone profiler name="remove old snapshot data" begin
+                rm(joinpath(job_out, "traj"); recursive=true, force=true)
             end
-            prev_sha256 = bytes2hex(sha256(header_str))
-            write_traj_file(traj, "header.json", codeunits(header_str))
-            local step::Int = 0
-
-            state, prev_sha256 = save_load_state!(rng_state, step, state, traj, save, load, prev_sha256)
-            @info "Simulation started."
-            while true
-                output = ZGroup()
-                copy!(Random.default_rng(), rng_state)
-                step += 1
-                state = loop(step, state; output)
-                copy!(rng_state, Random.default_rng())
-
-                state, prev_sha256 = save_load_state!(rng_state, step, state, traj, save, load, prev_sha256, output)
-
-                copy!(Random.default_rng(), rng_state)
-                isdone::Bool, expected_final_step::Int64 = done(step::Int, state)
-                copy!(rng_state, Random.default_rng())
-
-                @info "step $step of $expected_final_step done"
-                if isdone
-                    save_footer(traj, step, prev_sha256)
-                    return
-                end
+            traj = mkpath(joinpath(job_out, "traj"))
+            header_str, r = init_run_state(;job, traj, setup, profiler)
+            r.prev_sha256 = write_traj_file(traj, "header.json", codeunits(header_str); profiler)
+            save_load_state!(r; save, load, profiler)
+            while do_a_step!(r; loop, load, save, done, profiler)
             end
         end
     end
@@ -161,84 +171,66 @@ function continue_job(out_dir, job;
         save,
         load,
         done,
+        profiler=NullProfiler(),
     )
     basic_name_check.(String.(split(job, '/'; keepempty=true)))
     # first set up logging
     job_out = mkpath(joinpath(abspath(out_dir), job))
-    traj = mkpath(joinpath(job_out, "traj"))
     in_new_log_dir(job_out) do
+        message!(profiler, "Continuing job in $(repr(job_out))")
         @info "Continuing job." job out_dir
         @info get_version_string()
         pidlock = try
             FileWatching.Pidfile.mkpidlock(joinpath(job_out,"traj.lock"); wait=false)
         catch ex
             ex isa InterruptException && rethrow()
+            message!(profiler, "failed to get traj.lock, continuing.")
             @warn "failed to get traj.lock, continuing."
             nothing
         end
         try
+            traj = mkpath(joinpath(job_out, "traj"))
             # Figure out what step to continue from
-            status = status_traj_dir(traj)
+            status = @zone profiler status_traj_dir(traj)
             if status == :done
+                message!(profiler, "Simulation already finished, exiting.")
                 @info "Simulation already finished, exiting."
                 return
             end
             step::Int = status
-            @info "Setting up simulation."
-            rng_state = Random.Xoshiro(reinterpret(UInt64, sha256(job))...)
-            copy!(Random.default_rng(), rng_state)
-            job_header, state = setup(job)
-            copy!(rng_state, Random.default_rng())
-            @info "Setup complete."
+
+            header_str, r = init_run_state(;job, traj, setup, profiler)
+
             if step == -2 || step == -1
-                header_str = sprint() do io
-                    JSON3.pretty(io, job_header; allow_inf = true)
-                end
-                prev_sha256 = bytes2hex(sha256(header_str))
-                write_traj_file(traj, "header.json", codeunits(header_str))
-                step = 0
-                state, prev_sha256 = save_load_state!(rng_state, step, state, traj, save, load, prev_sha256)
-                @info "Simulation started."
+                @info "Simulation restarting."
+                r.prev_sha256 = write_traj_file(traj, "header.json", codeunits(header_str); profiler)
+                save_load_state!(r; save, load, profiler)
             else
                 @info "Continuing simulation from step $(step)."
-                snapshot_data = read(joinpath(traj, step_path(step)))
-                snapshot_group = unzip_group(snapshot_data)
+                r.step = step
+                snapshot_data = @zone profiler read(joinpath(traj, step_path(step)))
+                snapshot_group = @zone profiler unzip_group(snapshot_data)
                 reread_sub_snapshot_group = snapshot_group["snap"]
-                rng_state = str_2_rng(attrs(snapshot_group)["rng_state"])
-                copy!(Random.default_rng(), rng_state)
-                state = load(step, reread_sub_snapshot_group, state)
-                copy!(rng_state, Random.default_rng())
-                prev_sha256 = bytes2hex(sha256(snapshot_data))
+                r.rng_state = str_2_rng(attrs(snapshot_group)["rng_state"])
+
+                copy!(Random.default_rng(), r.rng_state)
+                r.state = @zone profiler load(r.step, reread_sub_snapshot_group, r.state; profiler)
+                copy!(r.rng_state, Random.default_rng())
+
+                r.prev_sha256 = bytes2hex(sha256(snapshot_data))
                 if step > 0
                     # check if done here.
-                    copy!(Random.default_rng(), rng_state)
-                    isdone::Bool, expected_final_step::Int64 = done(step::Int, state)
-                    copy!(rng_state, Random.default_rng())
+                    copy!(Random.default_rng(), r.rng_state)
+                    isdone::Bool, expected_final_step::Int64 = @zone profiler done(step::Int, r.state; profiler)
+                    copy!(r.rng_state, Random.default_rng())
                     @info "step $step of $expected_final_step done"
                     if isdone
-                        save_footer(traj, step, prev_sha256)
+                        save_footer(r; profiler)
                         return
                     end
                 end
             end
-            while true
-                output = ZGroup()
-                copy!(Random.default_rng(), rng_state)
-                step += 1
-                state = loop(step, state; output)
-                copy!(rng_state, Random.default_rng())
-
-                state, prev_sha256 = save_load_state!(rng_state, step, state, traj, save, load, prev_sha256, output)
-
-                copy!(Random.default_rng(), rng_state)
-                isdone, expected_final_step = done(step::Int, state)
-                copy!(rng_state, Random.default_rng())
-
-                @info "step $step of $expected_final_step done"
-                if isdone
-                    save_footer(traj, step, prev_sha256)
-                    return
-                end
+            while do_a_step!(r; loop, load, save, done, profiler)
             end
         finally
             isnothing(pidlock) || close(pidlock)
@@ -246,53 +238,49 @@ function continue_job(out_dir, job;
     end
 end
 
-
 function save_load_state!(
-        rng_state,
-        step::Int,
-        state,
-        traj::String,
+        r::RunState;
         save,
         load,
-        prev_sha256::String,
-        output::Union{Nothing, ZGroup}=nothing,
+        output= nothing,
+        profiler= NullProfiler(),
     )
     snapshot_group = ZGroup()
 
-    copy!(Random.default_rng(), rng_state)
-    sub_snapshot_group = save(step, state)
-    copy!(rng_state, Random.default_rng())
+    copy!(Random.default_rng(), r.rng_state)
+    sub_snapshot_group = @zone profiler save(r.step, r.state; profiler)
+    copy!(r.rng_state, Random.default_rng())
 
     snapshot_group["snap"] = sub_snapshot_group
     if !isnothing(output)
         snapshot_group["out"] = output
     end
-    attrs(snapshot_group)["rng_state"] = rng_2_str(rng_state)
-    attrs(snapshot_group)["step"] = step
-    attrs(snapshot_group)["prev_sha256"] = prev_sha256
-    snapshot_data = zip_group(snapshot_group)
-    reread_sub_snapshot_group = unzip_group(snapshot_data)["snap"]
+    attrs(snapshot_group)["rng_state"] = rng_2_str(r.rng_state)
+    attrs(snapshot_group)["step"] = r.step
+    attrs(snapshot_group)["prev_sha256"] = r.prev_sha256
+    snapshot_data = @zone profiler zip_group(snapshot_group)
+    reread_sub_snapshot_group = @zone profiler unzip_group(snapshot_data)["snap"]
 
-    copy!(Random.default_rng(), rng_state)
-    state = load(step, reread_sub_snapshot_group, state)
-    copy!(rng_state, Random.default_rng())
+    copy!(Random.default_rng(), r.rng_state)
+    r.state = @zone profiler load(r.step, reread_sub_snapshot_group, r.state; profiler)
+    copy!(r.rng_state, Random.default_rng())
 
     # avoid over 1000 files in a directory
-    sp = step_path(step)
-    mkpath(dirname(joinpath(traj, sp)))
-    write_traj_file(traj, sp, snapshot_data)
-    state, bytes2hex(sha256(snapshot_data))
+    sp = step_path(r.step)
+    mkpath(dirname(joinpath(r.traj, sp)))
+    r.prev_sha256 = write_traj_file(r.traj, sp, snapshot_data; profiler)
+    nothing
 end
 
-function save_footer(traj, step, prev_sha256)
+function save_footer(r::RunState; profiler=NullProfiler())
     job_footer = OrderedCollections.OrderedDict([
-        "steps" => step,
-        "prev_sha256" => prev_sha256,
+        "steps" => r.step,
+        "prev_sha256" => r.prev_sha256,
     ])
     footer_str = sprint() do io
         JSON3.pretty(io, job_footer; allow_inf = true)
     end
-    write_traj_file(traj, "footer.json", codeunits(footer_str))
+    write_traj_file(r.traj, "footer.json", codeunits(footer_str); profiler)
     @info "Simulation completed."
 end
 
