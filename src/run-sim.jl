@@ -44,7 +44,7 @@ function do_a_step!(r::RunState; loop, load, save, done, profiler=NullProfiler()
     isdone::Bool, expected_final_step::Int64 = @zone profiler done(r.step, r.state; profiler)
     copy!(r.rng_state, Random.default_rng())
 
-    @info "step $step of $expected_final_step done"
+    @info "step $r.step of $expected_final_step done"
     frame_mark!(profiler)
     if isdone
         save_footer(r; profiler)
