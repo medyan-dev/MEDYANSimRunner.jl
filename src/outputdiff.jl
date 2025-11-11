@@ -1,9 +1,5 @@
 # functions to show the difference between two job outputs
 
-import DeepDiffs
-using SmallZarrGroups
-import JSON3
-
 
 """
     print_json_diff(io::IO, json1::AbstractString, json2::AbstractString)
