@@ -35,7 +35,10 @@ function do_a_step!(r::RunState; loop, load, save, done, profiler=NullProfiler()
     output = ZGroup()
     copy!(Random.default_rng(), r.rng_state)
     r.step += 1
-    r.state = @zone profiler loop(r.step, r.state; output, profiler)
+    r.state = @zone profiler name="loop" begin
+        zone_text!(profiler, "step: $(r.step)")
+        loop(r.step, r.state; output, profiler)
+    end
     copy!(r.rng_state, Random.default_rng())
 
     save_load_state!(r; save, load, output, profiler)
@@ -259,7 +262,7 @@ function save_load_state!(
     attrs(snapshot_group)["step"] = r.step
     attrs(snapshot_group)["prev_sha256"] = r.prev_sha256
     snapshot_data = @zone profiler zip_group(snapshot_group)
-    reread_sub_snapshot_group = @zone profiler unzip_group(snapshot_data)["snap"]
+    reread_sub_snapshot_group = @zone(profiler, unzip_group(snapshot_data))["snap"]
 
     copy!(Random.default_rng(), r.rng_state)
     r.state = @zone profiler load(r.step, reread_sub_snapshot_group, r.state; profiler)

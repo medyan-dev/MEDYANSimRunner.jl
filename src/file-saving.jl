@@ -57,8 +57,8 @@ function write_traj_file(
     @zone profiler name="write_traj_file" begin
         new_hash = sha256(data)
         file_path = joinpath(dir_name, file_name)
-        zone_active(profiler) && zone_text!(profiler, "saving to: $(repr(file_path))")
-        zone_active(profiler) && zone_text!(profiler, "$(length(data)) bytes")
+        zone_active(profiler) && zone_text!(profiler, repr(file_path))
+        zone_active(profiler) && zone_text!(profiler, "$(round(length(data)*1E-3; sigdigits=4)) kB")
         if isfile(file_path)
             if filesize(file_path) == length(data)
                 existing_hash = open(sha256, file_path)

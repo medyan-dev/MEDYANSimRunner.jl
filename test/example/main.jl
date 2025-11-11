@@ -53,5 +53,10 @@ function loop(step::Int, state; output::ZGroup, kwargs...)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    MEDYANSimRunner.run(ARGS; jobs, setup, loop, load, save, done)
+    # using ZoneProfilerTracy: TracyProfiler
+    # import TracyProfiler_jll
+    # profiler = TracyProfiler(TracyProfiler_jll)
+    MEDYANSimRunner.run(ARGS; jobs, setup, loop, load, save, done,
+    # profiler,
+    )
 end
