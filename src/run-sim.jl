@@ -248,31 +248,33 @@ function save_load_state!(
         output= nothing,
         profiler= NullProfiler(),
     )
-    snapshot_group = ZGroup()
+    @zone profiler name="io" begin
+        snapshot_group = ZGroup()
 
-    copy!(Random.default_rng(), r.rng_state)
-    sub_snapshot_group = @zone profiler save(r.step, r.state; profiler)
-    copy!(r.rng_state, Random.default_rng())
+        copy!(Random.default_rng(), r.rng_state)
+        sub_snapshot_group = @zone profiler save(r.step, r.state; profiler)
+        copy!(r.rng_state, Random.default_rng())
 
-    snapshot_group["snap"] = sub_snapshot_group
-    if !isnothing(output)
-        snapshot_group["out"] = output
+        snapshot_group["snap"] = sub_snapshot_group
+        if !isnothing(output)
+            snapshot_group["out"] = output
+        end
+        attrs(snapshot_group)["rng_state"] = rng_2_str(r.rng_state)
+        attrs(snapshot_group)["step"] = r.step
+        attrs(snapshot_group)["prev_sha256"] = r.prev_sha256
+        snapshot_data = @zone profiler zip_group(snapshot_group)
+        reread_sub_snapshot_group = @zone(profiler, unzip_group(snapshot_data))["snap"]
+
+        copy!(Random.default_rng(), r.rng_state)
+        r.state = @zone profiler load(r.step, reread_sub_snapshot_group, r.state; profiler)
+        copy!(r.rng_state, Random.default_rng())
+
+        # avoid over 1000 files in a directory
+        sp = step_path(r.step)
+        mkpath(dirname(joinpath(r.traj, sp)))
+        r.prev_sha256 = write_traj_file(r.traj, sp, snapshot_data; profiler)
+        nothing
     end
-    attrs(snapshot_group)["rng_state"] = rng_2_str(r.rng_state)
-    attrs(snapshot_group)["step"] = r.step
-    attrs(snapshot_group)["prev_sha256"] = r.prev_sha256
-    snapshot_data = @zone profiler zip_group(snapshot_group)
-    reread_sub_snapshot_group = @zone(profiler, unzip_group(snapshot_data))["snap"]
-
-    copy!(Random.default_rng(), r.rng_state)
-    r.state = @zone profiler load(r.step, reread_sub_snapshot_group, r.state; profiler)
-    copy!(r.rng_state, Random.default_rng())
-
-    # avoid over 1000 files in a directory
-    sp = step_path(r.step)
-    mkpath(dirname(joinpath(r.traj, sp)))
-    r.prev_sha256 = write_traj_file(r.traj, sp, snapshot_data; profiler)
-    nothing
 end
 
 function save_footer(r::RunState; profiler=NullProfiler())
