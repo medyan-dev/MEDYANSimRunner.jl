@@ -1,6 +1,6 @@
 name = "MEDYANSimRunner"
 uuid = "b58a3b99-22e3-44d1-b5ea-258f082a6fe8"
-version = "0.6.2"
+version = "0.6.3"
 authors = ["nhz2 <nhz2@cornell.edu>"]
 
 [workspace]
@@ -30,7 +30,7 @@ InteractiveUtils = "1"
 JSON3 = "1"
 Logging = "1"
 LoggingExtras = "1"
-OrderedCollections = "1"
+OrderedCollections = "1, 2"
 Random = "1"
 SHA = "0.7, 1"
 SmallZarrGroups = "0.8.3"
