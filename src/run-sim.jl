@@ -25,9 +25,7 @@ function init_run_state(;job, traj, setup, profiler)
     job_header, state = @zone profiler setup(job; profiler)
     copy!(rng_state, Random.default_rng())
 
-    header_str = sprint() do io
-        JSON3.pretty(io, job_header; allow_inf = true)
-    end
+    header_str = JSON.json(job_header; pretty=4)
     header_str, RunState(rng_state, 0, state, "", traj)
 end
 
@@ -282,9 +280,7 @@ function save_footer(r::RunState; profiler=NullProfiler())
         "steps" => r.step,
         "prev_sha256" => r.prev_sha256,
     ])
-    footer_str = sprint() do io
-        JSON3.pretty(io, job_footer; allow_inf = true)
-    end
+    footer_str = JSON.json(job_footer; pretty=4)
     write_traj_file(r.traj, "footer.json", codeunits(footer_str); profiler)
     @info "Simulation completed."
 end

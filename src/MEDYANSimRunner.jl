@@ -6,7 +6,7 @@ using Logging: Logging, current_logger, with_logger
 using SmallZarrGroups: SmallZarrGroups, ZGroup, attrs
 import InteractiveUtils
 import LoggingExtras
-import JSON3
+import JSON
 import Dates
 using SHA: sha256
 import FileWatching
